@@ -1,0 +1,50 @@
+# Fase de prueba: comprueba que los runners de GitHub llegan a la API del Ministerio.
+# Todavía no carga nada en Snowflake. Cuando funcione, el cron pasará a "0 */3 * * *"
+# y el paso de prueba se sustituirá por ingestion/ingest_fuel_prices.py.
+name: Ingesta precios carburantes
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub interpreta el cron en UTC y puede arrancar con varios minutos de retraso.
+    - cron: "*/30 * * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  probar-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      API_URL: https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/
+    steps:
+      - name: Llamar a la API
+        run: |
+          http_code=$(curl -sS --max-time 60 -H "Accept: application/json" \
+            -o respuesta.json -w "%{http_code}" "$API_URL")
+          echo "HTTP: $http_code"
+          test "$http_code" = "200"
+
+      - name: Comprobar el contenido
+        shell: python
+        run: |
+          import json
+          import os
+
+          with open("respuesta.json", encoding="utf-8-sig") as f:
+              datos = json.load(f)
+
+          estaciones = len(datos["ListaEESSPrecio"])
+          resumen = (
+              f"- Fecha API: {datos['Fecha']}\n"
+              f"- Resultado: {datos['ResultadoConsulta']}\n"
+              f"- Estaciones: {estaciones}\n"
+              f"- Tamaño: {os.path.getsize('respuesta.json')} bytes\n"
+          )
+          print(resumen)
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
+              f.write(resumen)
+
+          if datos["ResultadoConsulta"] != "OK" or estaciones == 0:
+              raise SystemExit("Respuesta inesperada de la API")
