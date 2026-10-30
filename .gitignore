@@ -1,0 +1,19 @@
+# Secretos
+.env
+*.pem
+*.p8
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE / SO
+.vscode/
+.idea/
+.DS_Store
+
+# Power BI
+*.pbix.bak
+~$*
