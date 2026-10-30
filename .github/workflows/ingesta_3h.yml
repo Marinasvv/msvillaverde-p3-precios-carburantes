@@ -1,50 +1,48 @@
-# Fase de prueba: comprueba que los runners de GitHub llegan a la API del Ministerio.
-# Todavía no carga nada en Snowflake. Cuando funcione, el cron pasará a "0 */3 * * *"
-# y el paso de prueba se sustituirá por ingestion/ingest_fuel_prices.py.
+# Descarga el JSON de la API de carburantes y lo carga en Snowflake (RAW) cada 3 horas.
 name: Ingesta precios carburantes
 
 on:
   workflow_dispatch:
   schedule:
     # GitHub interpreta el cron en UTC y puede arrancar con varios minutos de retraso.
-    - cron: "*/30 * * * *"
+    - cron: "0 */3 * * *"
 
 permissions:
   contents: read
 
 jobs:
-  probar-api:
+  ingesta:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     env:
-      API_URL: https://sedeaplicaciones.minetur.gob.es/ServiciosRESTCarburantes/PreciosCarburantes/EstacionesTerrestres/
+      SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+      SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+      SNOWFLAKE_ROLE: SYSADMIN
+      SNOWFLAKE_WAREHOUSE: CARBURANTES_WH
+      SNOWFLAKE_DATABASE: CARBURANTES_DB
+      SNOWFLAKE_SCHEMA: RAW
     steps:
-      - name: Llamar a la API
+      - name: Descargar el repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Preparar la clave de Snowflake
+        env:
+          SNOWFLAKE_PRIVATE_KEY: ${{ secrets.SNOWFLAKE_PRIVATE_KEY }}
         run: |
-          http_code=$(curl -sS --max-time 60 -H "Accept: application/json" \
-            -o respuesta.json -w "%{http_code}" "$API_URL")
-          echo "HTTP: $http_code"
-          test "$http_code" = "200"
+          key_path="$RUNNER_TEMP/snowflake_key.p8"
+          printf '%s\n' "$SNOWFLAKE_PRIVATE_KEY" > "$key_path"
+          chmod 600 "$key_path"
+          echo "SNOWFLAKE_PRIVATE_KEY_PATH=$key_path" >> "$GITHUB_ENV"
 
-      - name: Comprobar el contenido
-        shell: python
-        run: |
-          import json
-          import os
-
-          with open("respuesta.json", encoding="utf-8-sig") as f:
-              datos = json.load(f)
-
-          estaciones = len(datos["ListaEESSPrecio"])
-          resumen = (
-              f"- Fecha API: {datos['Fecha']}\n"
-              f"- Resultado: {datos['ResultadoConsulta']}\n"
-              f"- Estaciones: {estaciones}\n"
-              f"- Tamaño: {os.path.getsize('respuesta.json')} bytes\n"
-          )
-          print(resumen)
-          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as f:
-              f.write(resumen)
-
-          if datos["ResultadoConsulta"] != "OK" or estaciones == 0:
-              raise SystemExit("Respuesta inesperada de la API")
+      - name: Ejecutar la ingesta
+        shell: bash
+        run: python ingestion/ingest_fuel_prices.py | tee -a "$GITHUB_STEP_SUMMARY"
