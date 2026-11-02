@@ -22,6 +22,8 @@ cloudflare/                        Worker que lanza el workflow cada 3 horas
 ingestion/ingest_fuel_prices.py    Descarga y carga en RAW
 sql/00_setup.sql                   Warehouse, base de datos y esquemas
 sql/01_raw.sql                     Stage, file format y tablas RAW
+sql/02_silver.sql                  Explosión del JSON y tablas SILVER
+sql/05_checks.sql                  Controles de calidad
 docs/evidencias/                   Evidencias de ejecución
 ```
 
@@ -72,6 +74,34 @@ SELECT * FROM CARBURANTES_DB.RAW.INGESTION_LOG ORDER BY LOGGED_AT DESC;
 
 El detalle de las ejecuciones y los registros insertados está en [`docs/evidencias`](docs/evidencias/README.md).
 
+## Normalización (SILVER)
+
+Toda la capa se construye solo con SQL en `sql/02_silver.sql`. La vista `v_station_snapshot` explota el JSON con `LATERAL FLATTEN` y deja una fila por estación y snapshot. Cada carga procesa únicamente los snapshots que faltan, por lo que puede repetirse sin duplicar datos.
+
+| Tabla | Granularidad | Contenido |
+|---|---|---|
+| `silver.fct_price_snapshot` | Estación + producto + `ingestion_ts` | Precio en €/l del Gasóleo A, la Gasolina 95 y el AdBlue |
+| `silver.dim_station` | Versión de cada estación | Rótulo, marca, dirección, ubicación y coordenadas |
+| `silver.ref_product` | Producto | Productos del alcance y rango plausible de precios |
+| `silver.ref_ccaa` | Comunidad autónoma | Nombre de cada comunidad, que no viene en el JSON |
+
+### Decisiones
+
+- **Gasolina 95:** corresponde a la E5, la que venden casi todas las estaciones. E5 Premium y E10 son productos distintos.
+- **Productos sin precio:** un precio vacío no genera fila, así que una estación sin AdBlue no tiene registro de ese producto.
+- **Precios atípicos:** los precios fuera del rango plausible se conservan como `is_price_suspect = TRUE`, porque son el dato oficial publicado.
+- **Coordenadas:** las que están a 0 o fuera de España quedan en `NULL`, y las invertidas se corrigen.
+- **Marca:** `brand` agrupa las variantes de un mismo rótulo, y las numeraciones como `Nº 7374` quedan como `SIN MARCA`. `rotulo` conserva el valor original.
+- **Fechas:** `ingestion_ts` está en UTC y `ingestion_ts_local` en horario de Madrid, que es el que se usará para el análisis diario.
+
+### Histórico de estaciones
+
+`dim_station` es una dimensión SCD tipo 2 con clave sintética `station_sk`. Cuando cambia un atributo, como el rótulo, se cierra la versión vigente con `valid_to` y se abre otra. El horario queda fuera de esta detección porque cambia con frecuencia y no se usa en el análisis.
+
+### Controles de calidad
+
+`sql/05_checks.sql` comprueba, entre otros puntos, la unicidad por `(ideess, product, ingestion_ts)`, que solo existan los tres productos y que todos los snapshots de RAW estén cargados. Cada control debe devolver 0 incidencias.
+
 ## Puesta en marcha
 
 ### Requisitos
@@ -82,7 +112,7 @@ El detalle de las ejecuciones y los registros insertados está en [`docs/evidenc
 
 ### 1. Crear las estructuras en Snowflake
 
-Ejecutar en orden `sql/00_setup.sql` y `sql/01_raw.sql` en un worksheet.
+Ejecutar en orden `sql/00_setup.sql`, `sql/01_raw.sql` y `sql/02_silver.sql` en un worksheet. Después, `sql/05_checks.sql` comprueba la calidad de los datos.
 
 ### 2. Generar las claves de acceso
 
