@@ -1,0 +1,7 @@
+name = "carburantes-scheduler"
+main = "worker.js"
+compatibility_date = "2026-10-01"
+
+# Cloudflare interpreta el cron en UTC.
+[triggers]
+crons = ["0 */3 * * *"]

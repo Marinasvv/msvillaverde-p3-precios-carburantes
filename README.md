@@ -5,10 +5,10 @@ Sistema analítico en Snowflake que conserva un histórico de precios cada 3 hor
 ## Arquitectura
 
 ```text
-API del Ministerio
-       │  cada 3 horas
+Cloudflare Worker (cada 3 horas)
+       │  lanza el workflow
        ▼
-GitHub Actions + script Python
+GitHub Actions + script Python  ←  API del Ministerio
        │  PUT + COPY INTO
        ▼
 RAW  →  SILVER  →  GOLD  →  Power BI
@@ -17,7 +17,8 @@ RAW  →  SILVER  →  GOLD  →  Power BI
 ## Estructura del repositorio
 
 ```text
-.github/workflows/ingesta_3h.yml   Programación de la ingesta
+.github/workflows/ingesta_3h.yml   Ejecución de la ingesta y cron de respaldo
+cloudflare/                        Worker que lanza el workflow cada 3 horas
 ingestion/ingest_fuel_prices.py    Descarga y carga en RAW
 sql/00_setup.sql                   Warehouse, base de datos y esquemas
 sql/01_raw.sql                     Stage, file format y tablas RAW
@@ -30,7 +31,13 @@ docs/evidencias/                   Evidencias de ejecución
 
 El proceso tiene que salir a una API externa y ejecutarse sin depender de un ordenador encendido. GitHub Actions cubre ambas cosas, no requiere infraestructura propia y deja un historial visible de cada ejecución. Además, la programación queda versionada junto al código.
 
-Limitación conocida: GitHub puede arrancar los cron con retraso. Por eso cada ejecución se asigna a una franja de 3 horas en lugar de depender de la hora exacta.
+Limitación detectada: GitHub puede arrancar los cron con retraso o no lanzarlos. En los primeros 3 días solo se capturaron 12 de 24 franjas, sin ningún error en la ingesta (ver [evidencias](docs/evidencias/README.md)).
+
+### Por qué Cloudflare Workers
+
+Para resolverlo, un Cloudflare Worker lanza el workflow cada 3 horas mediante la API de GitHub. Cloudflare solo actúa como programador: la descarga y la carga siguen ejecutándose en GitHub Actions con el mismo script.
+
+El cron de GitHub se mantiene como respaldo. Si los dos lanzan la misma franja, el control de duplicados evita una segunda carga.
 
 ### Flujo de cada ejecución
 
@@ -62,6 +69,8 @@ El enunciado no los exige, pero se añaden hasta 3 reintentos ante errores tempo
 ```sql
 SELECT * FROM CARBURANTES_DB.RAW.INGESTION_LOG ORDER BY LOGGED_AT DESC;
 ```
+
+El detalle de las ejecuciones y los registros insertados está en [`docs/evidencias`](docs/evidencias/README.md).
 
 ## Puesta en marcha
 
@@ -122,3 +131,12 @@ Añadir estos secretos en **Settings → Secrets and variables → Actions**:
 | `SNOWFLAKE_PRIVATE_KEY` | Contenido completo de la clave privada |
 
 El workflow se ejecuta con el cron `0 */3 * * *` y también puede lanzarse a mano desde la pestaña **Actions**.
+
+### 6. Desplegar el Worker de Cloudflare
+
+1. Crear en GitHub un token *fine-grained* limitado a este repositorio, con el permiso **Actions: Read and write**.
+2. Crear un Worker en Cloudflare con el código de `cloudflare/worker.js`.
+3. Añadir el token al Worker como secreto `GITHUB_TOKEN`.
+4. Añadir el cron `0 */3 * * *` en los Triggers del Worker.
+
+El token caduca en la fecha elegida al crearlo; después hay que renovarlo y actualizar el secreto.
