@@ -14,12 +14,6 @@ GitHub Actions + script Python
 RAW  →  SILVER  →  GOLD  →  Power BI
 ```
 
-| Capa | Contenido | Estado |
-|---|---|---|
-| RAW | JSON completo sin transformar (append-only) | Implementada |
-| SILVER | Datos normalizados y tipados | Pendiente |
-| GOLD | Modelo en estrella para Power BI | Pendiente |
-
 ## Estructura del repositorio
 
 ```text
@@ -36,8 +30,6 @@ docs/evidencias/                   Evidencias de ejecución
 
 El proceso tiene que salir a una API externa y ejecutarse sin depender de un ordenador encendido. GitHub Actions cubre ambas cosas, no requiere infraestructura propia y deja un historial visible de cada ejecución. Además, la programación queda versionada junto al código.
 
-Antes de construir nada se comprobó que los servidores de GitHub llegan a la API. Como la prueba salió bien, no hizo falta la alternativa prevista con Cloudflare Workers. Una Snowflake Task sola tampoco era suficiente, porque seguiría necesitando un proceso externo que llame a la API.
-
 Limitación conocida: GitHub puede arrancar los cron con retraso. Por eso cada ejecución se asigna a una franja de 3 horas en lugar de depender de la hora exacta.
 
 ### Flujo de cada ejecución
@@ -51,7 +43,7 @@ Limitación conocida: GitHub puede arrancar los cron con retraso. Por eso cada e
 
 `COPY INTO` recuerda durante 64 días los ficheros ya cargados en una tabla. Como cada franja tiene un nombre fijo, un reintento en la misma franja no inserta otra fila y queda registrado como `SKIPPED_DUPLICATE`.
 
-No se usa el campo `Fecha` del JSON para esto porque es la hora de la consulta: cambia en cada llamada aunque los datos sean idénticos. Tampoco se usa un hash del contenido, porque dos franjas seguidas pueden traer legítimamente los mismos precios.
+No se usa el campo `Fecha` del JSON para esto porque es la hora de la consulta: cambia en cada llamada aunque los datos sean idénticos.
 
 ### Reintentos
 
