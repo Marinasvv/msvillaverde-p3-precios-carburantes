@@ -87,7 +87,7 @@ Toda la capa se construye solo con SQL en `sql/02_silver.sql`. La vista `v_stati
 
 ### Decisiones
 
-- **Gasolina 95:** corresponde a la E5, la que venden casi todas las estaciones. E5 Premium y E10 son productos distintos.
+- **Gasolina 95:** corresponde a la E5.
 - **Productos sin precio:** un precio vacío no genera fila, así que una estación sin AdBlue no tiene registro de ese producto.
 - **Precios atípicos:** los precios fuera del rango plausible se conservan como `is_price_suspect = TRUE`, porque son el dato oficial publicado.
 - **Coordenadas:** las que están a 0 o fuera de España quedan en `NULL`, y las invertidas se corrigen.
