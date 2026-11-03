@@ -23,6 +23,7 @@ ingestion/ingest_fuel_prices.py    Descarga y carga en RAW
 sql/00_setup.sql                   Warehouse, base de datos y esquemas
 sql/01_raw.sql                     Stage, file format y tablas RAW
 sql/02_silver.sql                  Explosión del JSON y tablas SILVER
+sql/03_gold.sql                    Modelo en estrella para Power BI
 sql/05_checks.sql                  Controles de calidad
 docs/evidencias/                   Evidencias de ejecución
 ```
@@ -37,7 +38,7 @@ Limitación detectada: GitHub puede arrancar los cron con retraso o no lanzarlos
 
 ### Por qué Cloudflare Workers
 
-Para resolverlo, un Cloudflare Worker lanza el workflow cada 3 horas mediante la API de GitHub. Cloudflare solo actúa como programador: la descarga y la carga siguen ejecutándose en GitHub Actions con el mismo script.
+Para resolverlo, un Cloudflare Worker lanza el workflow cada 3 horas mediante la API de GitHub. Cloudflare solo actúa como programador: la descarga y la carga siguen ejecutándose en GitHub Actions con el mismo script. Desde que se activó, ha capturado las 7 franjas transcurridas, todas en el primer minuto.
 
 El cron de GitHub se mantiene como respaldo. Si los dos lanzan la misma franja, el control de duplicados evita una segunda carga.
 
@@ -91,7 +92,7 @@ Toda la capa se construye solo con SQL en `sql/02_silver.sql`. La vista `v_stati
 - **Productos sin precio:** un precio vacío no genera fila, así que una estación sin AdBlue no tiene registro de ese producto.
 - **Precios atípicos:** los precios fuera del rango plausible se conservan como `is_price_suspect = TRUE`, porque son el dato oficial publicado.
 - **Coordenadas:** las que están a 0 o fuera de España quedan en `NULL`, y las invertidas se corrigen.
-- **Marca:** `brand` agrupa las variantes de un mismo rótulo, y las numeraciones como `Nº 7374` quedan como `SIN MARCA`. `rotulo` conserva el valor original.
+- **Marca:** la función `normalize_brand` toma la primera palabra del rótulo, de modo que `DISA AGAETE` y `DISA EL PINAR` quedan como `DISA`. Si esa palabra es genérica (`ES`, `LA`, `GASOLINERA`, `COOP`…), se busca una marca conocida en el resto del rótulo (`ES AVINYÓ -CEPSA-` queda como `CEPSA`); si no la hay, conserva el rótulo completo, porque suele ser una estación independiente. Las numeraciones como `Nº 7374` y rótulos como `(SIN RÓTULO)` quedan como `SIN MARCA`. `rotulo` conserva el valor original, y la marca se recalcula en cada carga para que un cambio de la regla se aplique a todo el histórico.
 - **Fechas:** `ingestion_ts` está en UTC y `ingestion_ts_local` en horario de Madrid, que es el que se usará para el análisis diario.
 
 ### Histórico de estaciones
@@ -101,6 +102,37 @@ Toda la capa se construye solo con SQL en `sql/02_silver.sql`. La vista `v_stati
 ### Controles de calidad
 
 `sql/05_checks.sql` comprueba, entre otros puntos, la unicidad por `(ideess, product, ingestion_ts)`, que solo existan los tres productos y que todos los snapshots de RAW estén cargados. Cada control debe devolver 0 incidencias.
+
+## Modelo analítico (GOLD)
+
+`sql/03_gold.sql` construye un modelo en estrella con tablas para Power BI:
+
+```text
+dim_date ──────┐
+dim_datetime ──┤
+               ├── fact_fuel_price
+dim_station ───┤
+dim_product ───┘
+```
+
+| Tabla | Granularidad | Uso |
+|---|---|---|
+| `gold.fact_fuel_price` | Estación + producto + `ingestion_ts` | Precios, cambios de precio y último precio conocido |
+| `gold.dim_station` | Versión de cada estación | Selector de estación, comparativas geográficas y mapa |
+| `gold.dim_product` | Producto | Selector de producto |
+| `gold.dim_date` | Día | Agregaciones diarias |
+| `gold.dim_datetime` | Hora | Análisis intradía (mejora opcional) |
+
+### Decisiones
+
+- **Fechas en horario de Madrid:** `date_key` y `datetime_key` salen de `ingestion_ts_local`, para que cada precio cuente en el día que corresponde en España.
+- **`dim_date` diaria:** la serie de cada 3 horas se analiza con `ingestion_ts_local` de la fact, y `dim_datetime` añade la vista por hora.
+- **Histórico de estaciones:** cada precio se une a la versión de la estación vigente en ese momento mediante `station_sk`.
+- **Cambios de precio:** `price_change_eur_l` e `is_price_change` se calculan frente a la captura anterior de la misma estación y producto.
+- **Saltos de precio:** `is_price_jump` marca los cambios de más de 25 céntimos entre dos capturas. Pueden ser errores de publicación o cambios reales, así que se conservan para revisarlos.
+- **Precio actual:** `is_latest_price` marca el último precio conocido, aunque la estación falte en la última captura.
+- **Zonas fiscales:** `tax_zone` separa Canarias y Ceuta y Melilla para comparar en igualdad de condiciones.
+- **Reconstrucción completa:** las tablas se regeneran en cada ejecución. Es lo más simple para calcular los cambios de precio, y SILVER conserva el histórico.
 
 ## Puesta en marcha
 
@@ -112,7 +144,7 @@ Toda la capa se construye solo con SQL en `sql/02_silver.sql`. La vista `v_stati
 
 ### 1. Crear las estructuras en Snowflake
 
-Ejecutar en orden `sql/00_setup.sql`, `sql/01_raw.sql` y `sql/02_silver.sql` en un worksheet. Después, `sql/05_checks.sql` comprueba la calidad de los datos.
+Ejecutar en orden `sql/00_setup.sql`, `sql/01_raw.sql`, `sql/02_silver.sql` y `sql/03_gold.sql` en un worksheet. Después, `sql/05_checks.sql` comprueba la calidad de los datos.
 
 ### 2. Generar las claves de acceso
 

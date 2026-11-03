@@ -55,6 +55,55 @@ SELECT * FROM VALUES
     ('AdBlue',      'Precio Adblue',         0.300, 3.000);
 
 -- =====================================================================
+-- Normalización de la marca
+-- =====================================================================
+
+-- Unifica variantes como 'BP ', '"BP"' o 'B.P.'.
+CREATE OR REPLACE FUNCTION clean_rotulo(rotulo STRING)
+RETURNS STRING
+AS
+$$
+    UPPER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(rotulo, '["\\.]', ''), '\\s+', ' ')))
+$$;
+
+-- Marcas conocidas que pueden aparecer en cualquier posición del rótulo.
+CREATE OR REPLACE FUNCTION known_brand_in(rotulo_clean STRING)
+RETURNS STRING
+AS
+$$
+    REGEXP_SUBSTR(
+        rotulo_clean,
+        '(^|[^A-Z0-9])(REPSOL|CEPSA|MOEVE|BP|GALP|SHELL|PETRONOR|CAMPSA|DISA|AVIA|Q8|ENI|'
+        || 'PLENERGY|BALLENOIL|PETROPRIX|CARREFOUR|ALCAMPO|ESCLATOIL)([^A-Z0-9]|$)',
+        1, 1, 'e', 2
+    )
+$$;
+
+-- La marca es la primera palabra del rótulo ('DISA AGAETE' -> 'DISA'), salvo en tres casos:
+--   * las numeraciones como 'Nº 7374' no son una marca;
+--   * si la primera palabra es genérica pero el rótulo incluye una marca conocida
+--     ('ES AVINYÓ -CEPSA-'), se usa esa marca;
+--   * si la primera palabra es genérica y no hay marca conocida ('ES LEMANS'), se conserva
+--     el rótulo completo, porque suele ser una estación independiente.
+CREATE OR REPLACE FUNCTION normalize_brand(rotulo STRING)
+RETURNS STRING
+AS
+$$
+    CASE
+        WHEN COALESCE(clean_rotulo(rotulo), '') = ''
+          OR clean_rotulo(rotulo) IN ('(SIN RÓTULO)', 'SIN RÓTULO', 'SIN ROTULO', 'LIBRE')
+          OR REGEXP_LIKE(clean_rotulo(rotulo), '^(Nº|N°|P?[0-9]).*') THEN 'SIN MARCA'
+        WHEN SPLIT_PART(clean_rotulo(rotulo), ' ', 1) IN (
+            'ES', 'E', 'EESS', 'US', 'ESTACION', 'ESTACIÓN', 'ESTACIO', 'ESTACIONES', 'AREA', 'ÁREA',
+            'GASOLINERA', 'GASOLINERAS', 'BENZINERA', 'GASOLEOS', 'GASÓLEOS', 'CARBURANTES',
+            'COMBUSTIBLES', 'PETRO', 'PETROL', 'FAST', 'GRUPO', 'TRANSPORTES',
+            'COOPERATIVA', 'COOP', 'SCOOP', 'LA', 'EL', 'LOS', 'LAS', 'SAN', 'SANTA', 'LOW'
+        ) THEN COALESCE(known_brand_in(clean_rotulo(rotulo)), clean_rotulo(rotulo))
+        ELSE SPLIT_PART(clean_rotulo(rotulo), ' ', 1)
+    END
+$$;
+
+-- =====================================================================
 -- Vista de explosión: una fila por estación y snapshot
 -- =====================================================================
 
@@ -70,9 +119,7 @@ typed AS (
         station,
         station:IDEESS::STRING                 AS ideess,
         TRIM(station:"Rótulo"::STRING)         AS rotulo,
-        -- Unifica variantes como 'BP ', '"BP"' o 'B.P.'.
-        UPPER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(station:"Rótulo"::STRING, '["\\.]', ''), '\\s+', ' ')))
-                                               AS rotulo_clean,
+        normalize_brand(station:"Rótulo"::STRING) AS brand,
         TRIM(station:"Dirección"::STRING)      AS address,
         TRIM(station:Localidad::STRING)        AS locality,
         TRIM(station:Municipio::STRING)        AS municipality,
@@ -86,14 +133,6 @@ typed AS (
 cleaned AS (
     SELECT
         *,
-        -- Numeraciones como 'Nº 7374' o 'P347' no son una marca.
-        CASE
-            WHEN REGEXP_LIKE(rotulo_clean, '^(Nº|N°|P?[0-9]).*') THEN 'SIN MARCA'
-            ELSE COALESCE(
-                REGEXP_SUBSTR(rotulo_clean, '^(REPSOL|MOEVE|CEPSA|GALP|SHELL|BP|PETRONOR|CAMPSA|AVIA|Q8)\\b'),
-                rotulo_clean
-            )
-        END AS brand,
         -- Alguna estación llega con latitud y longitud invertidas.
         IFF(raw_longitude BETWEEN 27 AND 44 AND raw_latitude NOT BETWEEN 27 AND 44,
             raw_longitude, raw_latitude) AS fixed_latitude,
@@ -210,6 +249,12 @@ FROM (
 WHERE d.station_sk = n.station_sk
   AND d.is_current
   AND n.next_valid_from IS NOT NULL;
+
+-- La marca se deriva del rótulo: si cambia la regla, se aplica también a las versiones
+-- ya guardadas. No forma parte del hash, así que no genera versiones nuevas.
+UPDATE dim_station
+SET brand = normalize_brand(rotulo)
+WHERE brand IS DISTINCT FROM normalize_brand(rotulo);
 
 -- =====================================================================
 -- Carga de fct_price_snapshot

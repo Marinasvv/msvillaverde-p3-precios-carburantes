@@ -42,7 +42,31 @@ WHERE d.ideess IS NULL
 UNION ALL
 SELECT 'SILVER: estaciones sin comunidad autónoma', COUNT(*)
 FROM SILVER.dim_station
-WHERE is_current AND ccaa IS NULL;
+WHERE is_current AND ccaa IS NULL
+UNION ALL
+SELECT 'GOLD: diferencia de filas entre fact y SILVER',
+       ABS((SELECT COUNT(*) FROM GOLD.fact_fuel_price) - (SELECT COUNT(*) FROM SILVER.fct_price_snapshot))
+UNION ALL
+SELECT 'GOLD: duplicados por station_sk + product_sk + ingestion_ts', COUNT(*)
+FROM (
+    SELECT station_sk, product_sk, ingestion_ts FROM GOLD.fact_fuel_price
+    GROUP BY station_sk, product_sk, ingestion_ts HAVING COUNT(*) > 1
+)
+UNION ALL
+SELECT 'GOLD: precios sin fila en una dimensión', COUNT(*)
+FROM GOLD.fact_fuel_price AS f
+LEFT JOIN GOLD.dim_station AS s ON f.station_sk = s.station_sk
+LEFT JOIN GOLD.dim_product AS p ON f.product_sk = p.product_sk
+LEFT JOIN GOLD.dim_date AS d ON f.date_key = d.date_key
+LEFT JOIN GOLD.dim_datetime AS t ON f.datetime_key = t.datetime_key
+WHERE s.station_sk IS NULL OR p.product_sk IS NULL
+   OR d.date_key IS NULL OR t.datetime_key IS NULL
+UNION ALL
+SELECT 'GOLD: combinaciones sin un único último precio', COUNT(*)
+FROM (
+    SELECT station_sk, product_sk FROM GOLD.fact_fuel_price
+    GROUP BY station_sk, product_sk HAVING COUNT_IF(is_latest_price) <> 1
+);
 
 -- Informativo: no son errores, sino casos que conviene vigilar.
 SELECT 'Estaciones con precios sospechosos en el último snapshot' AS indicador, COUNT(DISTINCT ideess) AS valor
@@ -53,6 +77,10 @@ UNION ALL
 SELECT 'Estaciones vigentes sin coordenadas válidas', COUNT(*)
 FROM SILVER.dim_station
 WHERE is_current AND (latitude IS NULL OR longitude IS NULL)
+UNION ALL
+SELECT 'Saltos de precio de más de 25 céntimos', COUNT(*)
+FROM GOLD.fact_fuel_price
+WHERE is_price_jump
 UNION ALL
 -- Detecta coordenadas válidas pero mal situadas. El máximo legítimo es Lanzarote, a 223 km.
 SELECT 'Estaciones a más de 250 km de su provincia', COUNT(*)
@@ -87,6 +115,21 @@ JOIN SILVER.dim_station AS d
 WHERE f.is_price_suspect
   AND f.ingestion_ts = (SELECT MAX(ingestion_ts) FROM SILVER.fct_price_snapshot)
 ORDER BY f.product, f.price_eur_l DESC;
+
+-- Detalle: saltos de precio de más de 25 céntimos.
+SELECT
+    s.ideess,
+    s.station_label,
+    p.product,
+    f.ingestion_ts_local,
+    f.previous_price_eur_l,
+    f.price_eur_l,
+    f.price_change_eur_l
+FROM GOLD.fact_fuel_price AS f
+JOIN GOLD.dim_station AS s ON f.station_sk = s.station_sk
+JOIN GOLD.dim_product AS p ON f.product_sk = p.product_sk
+WHERE f.is_price_jump
+ORDER BY f.ingestion_ts_local DESC;
 
 -- Detalle: estaciones del último snapshot con coordenadas tratadas.
 SELECT
