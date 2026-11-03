@@ -24,6 +24,7 @@ sql/00_setup.sql                   Warehouse, base de datos y esquemas
 sql/01_raw.sql                     Stage, file format y tablas RAW
 sql/02_silver.sql                  Explosión del JSON y tablas SILVER
 sql/03_gold.sql                    Modelo en estrella para Power BI
+sql/04_tasks.sql                   Refresco automático de SILVER y GOLD
 sql/05_checks.sql                  Controles de calidad
 docs/evidencias/                   Evidencias de ejecución
 ```
@@ -134,6 +135,39 @@ dim_product ───┘
 - **Zonas fiscales:** `tax_zone` separa Canarias y Ceuta y Melilla para comparar en igualdad de condiciones.
 - **Reconstrucción completa:** las tablas se regeneran en cada ejecución. Es lo más simple para calcular los cambios de precio, y SILVER conserva el histórico.
 
+## Refresco automático
+
+`sql/04_tasks.sql` encadena SILVER y GOLD a la ingesta, sin intervención manual:
+
+```text
+Worker de Cloudflare (cada 3 horas) → GitHub Actions → RAW.fuel_prices_json
+    → RAW.fuel_prices_stream detecta la captura nueva
+    → OPS.refresh_silver_task llama a SILVER.refresh_silver()
+    → OPS.refresh_gold_task llama a GOLD.refresh_gold()
+```
+
+### Decisiones
+
+- **Stream + Task:** la Task raíz comprueba el stream cada 5 minutos y solo se ejecuta si hay una captura nueva. Esa comprobación no enciende el warehouse, así que el refresco ocurre una vez por ingesta, cada 3 horas, sin depender de la hora exacta a la que termine la carga.
+- **Procedimientos:** las cargas de SILVER y GOLD son los procedimientos `refresh_silver` y `refresh_gold`. El SQL existe una sola vez y lo usan tanto las Tasks como la ejecución manual de `02_silver.sql` y `03_gold.sql`.
+- **Tolerancia a fallos:** `refresh_silver` procesa todos los snapshots de RAW que aún no están en SILVER, no solo los del stream. Si un refresco falla, el siguiente recupera lo pendiente.
+- **Permiso necesario:** activar Tasks requiere conceder `EXECUTE TASK` a `SYSADMIN` con `ACCOUNTADMIN`, una sola vez (incluido al principio de `04_tasks.sql`).
+
+### Trazabilidad
+
+| Objeto | Contenido |
+|---|---|
+| `RAW.ingestion_log` | Cada ingesta: estado, filas insertadas y estaciones |
+| `OPS.refresh_log` | Cada refresco de SILVER y GOLD: inicio, fin, estado, capturas nuevas, filas insertadas y totales |
+| `OPS.v_snapshot_trace` | Cada captura: momento de carga y registros en RAW, SILVER y GOLD |
+
+```sql
+SELECT * FROM CARBURANTES_DB.OPS.v_snapshot_trace ORDER BY ingestion_ts DESC;
+SELECT * FROM CARBURANTES_DB.OPS.refresh_log ORDER BY started_at DESC;
+```
+
+El primer refresco automático, con la captura del 03/11 a las 12:00 UTC, llevó la captura de RAW a GOLD en 78 segundos sin errores. El detalle está en las [evidencias](docs/evidencias/README.md#evidencias-del-refresco-automático).
+
 ## Puesta en marcha
 
 ### Requisitos
@@ -144,7 +178,7 @@ dim_product ───┘
 
 ### 1. Crear las estructuras en Snowflake
 
-Ejecutar en orden `sql/00_setup.sql`, `sql/01_raw.sql`, `sql/02_silver.sql` y `sql/03_gold.sql` en un worksheet. Después, `sql/05_checks.sql` comprueba la calidad de los datos.
+Ejecutar en orden `sql/00_setup.sql`, `sql/01_raw.sql`, `sql/02_silver.sql`, `sql/03_gold.sql` y `sql/04_tasks.sql` en un worksheet. El último necesita que el usuario pueda usar el rol `ACCOUNTADMIN` para conceder el permiso de Tasks. Después, `sql/05_checks.sql` comprueba la calidad de los datos.
 
 ### 2. Generar las claves de acceso
 

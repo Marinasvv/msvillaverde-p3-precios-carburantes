@@ -43,3 +43,9 @@ CREATE TABLE IF NOT EXISTS ingestion_log (
     error_message  STRING                 COMMENT 'Detalle del error, si lo hay',
     logged_at      TIMESTAMP_NTZ NOT NULL DEFAULT SYSDATE() COMMENT 'Momento del registro, en UTC'
 );
+
+-- Detecta las capturas nuevas para que la Task refresque SILVER y GOLD (ver 04_tasks.sql).
+CREATE STREAM IF NOT EXISTS fuel_prices_stream
+    ON TABLE fuel_prices_json
+    APPEND_ONLY = TRUE
+    COMMENT = 'Capturas nuevas de la API pendientes de refrescar en SILVER y GOLD';

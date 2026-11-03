@@ -1,0 +1,5 @@
+run_id,layer,started_at,finished_at,status,new_snapshots,rows_inserted,total_rows,details,error_message
+5c3e8333-840d-44a9-bb12-ca7b66dfba95,SILVER,2026-11-03 10:25:55.290000,2026-11-03 10:26:00.397000,OK,0,0,525681,"{""brands_updated"":0,""stations_closed"":0,""stations_inserted"":0}",
+0ba0e72d-f385-45e0-a0c2-8046a8125ecb,GOLD,2026-11-03 10:26:03.933000,2026-11-03 10:26:07.580000,OK,,525681,525681,"{""dim_station_rows"":11483}",
+308385d1-72ab-4f6a-8542-e6572125d728,SILVER,2026-11-03 12:02:43.009000,2026-11-03 12:02:48.979000,OK,1,25054,550735,"{""brands_updated"":0,""stations_closed"":1,""stations_inserted"":8}",
+d7d09c4a-518c-4b8f-bc9f-9505fd8de764,GOLD,2026-11-03 12:02:51.154000,2026-11-03 12:02:54.823000,OK,,550735,550735,"{""dim_station_rows"":11491}",

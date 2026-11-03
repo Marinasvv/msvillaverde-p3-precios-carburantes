@@ -1,5 +1,5 @@
 -- Capa SILVER: explota el JSON de RAW y lo normaliza usando solo SQL.
--- Se puede ejecutar varias veces: cada carga solo procesa los snapshots que faltan.
+-- Se puede ejecutar varias veces: la carga (refresh_silver) solo procesa los snapshots que faltan.
 --
 -- Orden de carga: dim_station primero y fct_price_snapshot al final, porque
 -- los snapshots ya presentes en la fact son los que se consideran procesados.
@@ -205,84 +205,133 @@ CREATE TABLE IF NOT EXISTS fct_price_snapshot (
 );
 
 -- =====================================================================
--- Carga de dim_station
+-- Carga incremental
 -- =====================================================================
 
--- Inserta una versión nueva para cada estación nueva o con atributos cambiados.
-INSERT INTO dim_station (
-    ideess, rotulo, brand, address, locality, municipality, province, id_ccaa, ccaa,
-    postal_code, latitude, longitude, attributes_hash, valid_from
-)
-WITH pending AS (
-    SELECT *
-    FROM v_station_snapshot
-    WHERE ingestion_ts NOT IN (SELECT DISTINCT ingestion_ts FROM fct_price_snapshot)
-),
-compared AS (
+-- Procesa los snapshots de RAW que aún no están en SILVER. La usa la Task de 04_tasks.sql
+-- y se puede llamar a mano. Orden: dim_station primero y fct_price_snapshot al final,
+-- porque los snapshots presentes en la fact son los que se consideran procesados.
+CREATE OR REPLACE PROCEDURE refresh_silver()
+RETURNS STRING
+LANGUAGE SQL
+AS
+$$
+DECLARE
+    run_id            STRING DEFAULT UUID_STRING();
+    stations_inserted NUMBER;
+    stations_closed   NUMBER;
+    brands_updated    NUMBER;
+    prices_inserted   NUMBER;
+    total_rows        NUMBER;
+    error_message     STRING;
+BEGIN
+    -- Registra el inicio y consume el stream, para que la Task no repita estos datos.
+    INSERT INTO OPS.refresh_log (run_id, layer, started_at, status, new_snapshots)
+    SELECT :run_id, 'SILVER', SYSDATE(), 'RUNNING', COUNT(*)
+    FROM RAW.fuel_prices_stream;
+
+    -- Inserta una versión nueva para cada estación nueva o con atributos cambiados.
+    INSERT INTO SILVER.dim_station (
+        ideess, rotulo, brand, address, locality, municipality, province, id_ccaa, ccaa,
+        postal_code, latitude, longitude, attributes_hash, valid_from
+    )
+    WITH pending AS (
+        SELECT *
+        FROM SILVER.v_station_snapshot
+        WHERE ingestion_ts NOT IN (SELECT DISTINCT ingestion_ts FROM SILVER.fct_price_snapshot)
+    ),
+    compared AS (
+        SELECT
+            p.*,
+            COALESCE(
+                LAG(p.attributes_hash) OVER (PARTITION BY p.ideess ORDER BY p.ingestion_ts),
+                d.attributes_hash
+            ) AS previous_hash
+        FROM pending AS p
+        LEFT JOIN SILVER.dim_station AS d
+            ON p.ideess = d.ideess AND d.is_current
+    )
     SELECT
-        p.*,
-        COALESCE(
-            LAG(p.attributes_hash) OVER (PARTITION BY p.ideess ORDER BY p.ingestion_ts),
-            d.attributes_hash
-        ) AS previous_hash
-    FROM pending AS p
-    LEFT JOIN dim_station AS d
-        ON p.ideess = d.ideess AND d.is_current
-)
-SELECT
-    ideess, rotulo, brand, address, locality, municipality, province, id_ccaa, ccaa,
-    postal_code, latitude, longitude, attributes_hash, ingestion_ts
-FROM compared
-WHERE previous_hash IS NULL
-   OR previous_hash <> attributes_hash;
+        ideess, rotulo, brand, address, locality, municipality, province, id_ccaa, ccaa,
+        postal_code, latitude, longitude, attributes_hash, ingestion_ts
+    FROM compared
+    WHERE previous_hash IS NULL
+       OR previous_hash <> attributes_hash;
+    stations_inserted := SQLROWCOUNT;
 
--- Cierra las versiones que ya tienen una posterior.
-UPDATE dim_station AS d
-SET valid_to = n.next_valid_from,
-    is_current = FALSE
-FROM (
+    -- Cierra las versiones que ya tienen una posterior.
+    UPDATE SILVER.dim_station AS d
+    SET valid_to = n.next_valid_from,
+        is_current = FALSE
+    FROM (
+        SELECT
+            station_sk,
+            LEAD(valid_from) OVER (PARTITION BY ideess ORDER BY valid_from) AS next_valid_from
+        FROM SILVER.dim_station
+    ) AS n
+    WHERE d.station_sk = n.station_sk
+      AND d.is_current
+      AND n.next_valid_from IS NOT NULL;
+    stations_closed := SQLROWCOUNT;
+
+    -- La marca se deriva del rótulo: si cambia la regla, se aplica también a las versiones
+    -- ya guardadas. No forma parte del hash, así que no genera versiones nuevas.
+    UPDATE SILVER.dim_station
+    SET brand = SILVER.normalize_brand(rotulo)
+    WHERE brand IS DISTINCT FROM SILVER.normalize_brand(rotulo);
+    brands_updated := SQLROWCOUNT;
+
+    -- El cruce con ref_product deja solo los tres productos. Un precio vacío o no numérico
+    -- no genera fila: así, una estación sin AdBlue no tiene registro de ese producto.
+    INSERT INTO SILVER.fct_price_snapshot (
+        ingestion_ts, ingestion_ts_local, ideess, product, price_eur_l, is_price_suspect
+    )
+    WITH prices AS (
+        SELECT
+            s.ingestion_ts,
+            s.ideess,
+            p.product,
+            p.min_price,
+            p.max_price,
+            TRY_TO_NUMBER(REPLACE(GET(s.station, p.json_key)::STRING, ',', '.'), 6, 3) AS price_eur_l
+        FROM SILVER.v_station_snapshot AS s
+        CROSS JOIN SILVER.ref_product AS p
+        WHERE s.ingestion_ts NOT IN (SELECT DISTINCT ingestion_ts FROM SILVER.fct_price_snapshot)
+    )
     SELECT
-        station_sk,
-        LEAD(valid_from) OVER (PARTITION BY ideess ORDER BY valid_from) AS next_valid_from
-    FROM dim_station
-) AS n
-WHERE d.station_sk = n.station_sk
-  AND d.is_current
-  AND n.next_valid_from IS NOT NULL;
+        ingestion_ts,
+        CONVERT_TIMEZONE('UTC', 'Europe/Madrid', ingestion_ts),
+        ideess,
+        product,
+        price_eur_l,
+        price_eur_l NOT BETWEEN min_price AND max_price
+    FROM prices
+    WHERE price_eur_l > 0;
+    prices_inserted := SQLROWCOUNT;
 
--- La marca se deriva del rótulo: si cambia la regla, se aplica también a las versiones
--- ya guardadas. No forma parte del hash, así que no genera versiones nuevas.
-UPDATE dim_station
-SET brand = normalize_brand(rotulo)
-WHERE brand IS DISTINCT FROM normalize_brand(rotulo);
+    SELECT COUNT(*) INTO :total_rows FROM SILVER.fct_price_snapshot;
 
--- =====================================================================
--- Carga de fct_price_snapshot
--- =====================================================================
+    UPDATE OPS.refresh_log
+    SET finished_at = SYSDATE(),
+        status = 'OK',
+        rows_inserted = :prices_inserted,
+        total_rows = :total_rows,
+        details = OBJECT_CONSTRUCT(
+            'stations_inserted', :stations_inserted,
+            'stations_closed', :stations_closed,
+            'brands_updated', :brands_updated
+        )
+    WHERE run_id = :run_id;
 
--- El cruce con ref_product deja solo los tres productos. Un precio vacío o no numérico
--- no genera fila: así, una estación sin AdBlue no tiene registro de ese producto.
-INSERT INTO fct_price_snapshot (
-    ingestion_ts, ingestion_ts_local, ideess, product, price_eur_l, is_price_suspect
-)
-WITH prices AS (
-    SELECT
-        s.ingestion_ts,
-        s.ideess,
-        p.product,
-        p.min_price,
-        p.max_price,
-        TRY_TO_NUMBER(REPLACE(GET(s.station, p.json_key)::STRING, ',', '.'), 6, 3) AS price_eur_l
-    FROM v_station_snapshot AS s
-    CROSS JOIN ref_product AS p
-    WHERE s.ingestion_ts NOT IN (SELECT DISTINCT ingestion_ts FROM fct_price_snapshot)
-)
-SELECT
-    ingestion_ts,
-    CONVERT_TIMEZONE('UTC', 'Europe/Madrid', ingestion_ts),
-    ideess,
-    product,
-    price_eur_l,
-    price_eur_l NOT BETWEEN min_price AND max_price
-FROM prices
-WHERE price_eur_l > 0;
+    RETURN 'SILVER: ' || prices_inserted || ' precios insertados';
+EXCEPTION
+    WHEN OTHER THEN
+        error_message := SQLERRM;
+        UPDATE OPS.refresh_log
+        SET finished_at = SYSDATE(), status = 'ERROR', error_message = :error_message
+        WHERE run_id = :run_id;
+        RAISE;
+END;
+$$;
+
+CALL refresh_silver();
