@@ -16,4 +16,7 @@ venv/
 
 # Power BI
 *.pbix.bak
+# Caché local y ajustes personales del proyecto .pbip
+**/.pbi/localSettings.json
+**/.pbi/cache.abf
 ~$*
