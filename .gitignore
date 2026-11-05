@@ -1,3 +1,7 @@
+# Enunciado de la formación (no se publica)
+enunciado/
+docs/Guia_paso_a_paso_observatorio_carburantes.pdf
+
 # Secretos
 .env
 *.pem
