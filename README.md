@@ -33,15 +33,15 @@ docs/evidencias/                   Evidencias de ejecución
 
 ## Ingesta (RAW)
 
-### Por qué GitHub Actions
+### GitHub Actions
 
 El proceso tiene que salir a una API externa y ejecutarse sin depender de un ordenador encendido. GitHub Actions cubre ambas cosas, no requiere infraestructura propia y deja un historial visible de cada ejecución. Además, la programación queda versionada junto al código.
 
 Limitación detectada: GitHub puede arrancar los cron con retraso o no lanzarlos. En los primeros 3 días solo se capturaron 12 de 24 franjas, sin ningún error en la ingesta (ver [evidencias](docs/evidencias/README.md)).
 
-### Por qué Cloudflare Workers
+### Solución: Cloudflare Workers
 
-Para resolverlo, un Cloudflare Worker lanza el workflow cada 3 horas mediante la API de GitHub. Cloudflare solo actúa como programador: la descarga y la carga siguen ejecutándose en GitHub Actions con el mismo script. Desde que se activó, ha capturado las 7 franjas transcurridas, todas en el primer minuto.
+Para resolverlo, un Cloudflare Worker lanza el workflow cada 3 horas mediante la API de GitHub. Cloudflare solo actúa como programador: la descarga y la carga siguen ejecutándose en GitHub Actions con el mismo script. Desde que se activó ha capturado las 33 franjas transcurridas, todas con los datos descargados en poco más de un minuto.
 
 El cron de GitHub se mantiene como respaldo. Si los dos lanzan la misma franja, el control de duplicados evita una segunda carga.
 
@@ -60,7 +60,7 @@ No se usa el campo `Fecha` del JSON para esto porque es la hora de la consulta: 
 
 ### Reintentos
 
-El enunciado no los exige, pero se añaden hasta 3 reintentos ante errores temporales de la API (500, 502, 503 y 504). Si aun así falla, la ejecución queda registrada como `ERROR` y la siguiente recoge el dato.
+Se añaden hasta 3 reintentos ante errores temporales de la API (500, 502, 503 y 504). Si aun así falla, la ejecución queda registrada como `ERROR` y la siguiente recoge el dato.
 
 ### Particularidades de la API
 
@@ -126,6 +126,24 @@ dim_product ───┘
 | `gold.dim_date` | Día | Agregaciones diarias |
 | `gold.dim_datetime` | Hora | Análisis intradía (mejora opcional) |
 
+Sobre estas tablas, `sql/06_powerbi.sql` crea en el mismo esquema las vistas `v_pbi_*` que lee Power BI. Cuatro son las dimensiones y la fact con solo las columnas que usa el informe y los cálculos ya hechos. La quinta, `v_pbi_resumen_estacion`, es una **segunda tabla de hechos agregada**:
+
+```text
+                     dim_fecha ──┐
+                     dim_hora ───┤
+                                 ├── fact_precio           (estación + producto + captura)
+dim_estacion ──┬─────────────────┤
+dim_producto ──┼─────────────────┘
+               └──────────────────── resumen_estacion      (estación + producto)
+```
+
+| Vista | Granularidad | Uso |
+|---|---|---|
+| `gold.v_pbi_fact_precio` | Estación + producto + captura | Precios, evolución, cambios por hora, variación a 24 h y 7 días, puesto en la provincia |
+| `gold.v_pbi_resumen_estacion` | Estación + producto | Nº de cambios y días con cambios en todo el histórico, 10 % de estaciones más activas y estaciones que cambian todos los días |
+
+`resumen_estacion` comparte las dimensiones de estación y producto, pero no las de fecha y hora: resume todo el histórico. Se calcula en SQL porque obtenerlo en DAX desde la fact (agrupar por estación, contar cambios y cortar el 10 % superior) daría medidas largas y lentas. Agrupa por `ideess` y se une a la versión vigente de la estación, para que una gasolinera que cambió de rótulo no cuente como dos.
+
 ### Decisiones
 
 - **Fechas en horario de Madrid:** `date_key` y `datetime_key` salen de `ingestion_ts_local`, para que cada precio cuente en el día que corresponde en España.
@@ -174,9 +192,15 @@ El primer refresco automático, con la captura del 03/11 a las 12:00 UTC, llevó
 
 `powerbi/observatorio_carburantes.pbip` es un proyecto de Power BI: el modelo y el informe se guardan como ficheros de texto, así que los cambios se pueden revisar en Git. Se abre con Power BI Desktop y se puede guardar como `.pbix`.
 
+### Cómo se construyó
+
+El informe se generó con ayuda de Claude Opus 5.5. Se le pasó un `.pbix` de un proyecto anterior como referencia de estilo y estructura (portada con navegación, panel de filtros lateral, colores y tipo de visuales) y la lista de preguntas que el informe tenía que responder.
+
+A partir de esa primera versión, el informe se revisó página a página en Power BI Desktop y se fue modificando: se ajustaron visuales, filtros y formatos, y el modelo se adaptó a las buenas prácticas descritas más abajo. Por último, se añadió la página **Misma marca, distinto lugar** por interés personal, para responder preguntas que no pedía el enunciado: si una misma marca cobra distinto según el tamaño del municipio.
+
 ### Modelo
 
-Power BI se conecta con el conector de Snowflake, en modo importación, a las vistas `v_pbi_*` del esquema GOLD (`sql/06_powerbi.sql`). La cuenta y el warehouse son parámetros (**Transformar datos → Administrar parámetros**).
+Power BI se conecta con el conector de Snowflake, en modo importación, a las vistas `v_pbi_*` del esquema GOLD (`sql/06_powerbi.sql`).
 
 | Tabla del modelo | Vista de GOLD | Contenido |
 |---|---|---|
@@ -189,7 +213,7 @@ Power BI se conecta con el conector de Snowflake, en modo importación, a las vi
 
 Decisiones:
 
-- **Sin pasos en Power Query:** cada tabla solo navega hasta su vista. Las vistas traen únicamente las columnas que usa el informe, en lugar de cargar las tablas completas.
+- **Evitar pasos en Power Query:** cada tabla solo navega hasta su vista. Las vistas traen únicamente las columnas que usa el informe, en lugar de cargar las tablas completas.
 - **El cálculo pesado lo hace Snowflake:** la variación a 24 horas y a 7 días (con `ASOF JOIN`), el puesto en la provincia, la diferencia con la media del día, el tamaño del municipio y la actividad de cada estación llegan calculados. Las medidas DAX son agregaciones simples sobre esas columnas.
 - **Claves numéricas:** las relaciones usan enteros (`STATION_SK`, `PRODUCT_SK`, `DATE_KEY` con formato AAAAMMDD y `HORA_KEY`). Son de uno a varios y filtran en una sola dirección. Las claves están ocultas.
 - **Sin columnas calculadas en DAX** y con todas las columnas en **No resumir**.
@@ -220,138 +244,145 @@ Cada página tiene un botón **Filtros** que abre un panel lateral con comunidad
 | ¿Cuándo ha cambiado el precio y cuánto? | Evolución por estación: tabla de cambios, con el precio anterior, el nuevo y la diferencia |
 | ¿Cuál es su precio medio diario y cómo se compara con su entorno? | Evolución por estación: tabla diaria con las medias del municipio y de la provincia, y tarjetas de diferencia y puesto en la provincia |
 
-## Conclusiones (provisionales)
+## Conclusiones
 
-Datos de la captura del 04/11/2026 a las 10:00 (hora peninsular), con unos 5 días de histórico. Hay que revisarlas cuando haya más histórico y esté disponible la variación a 7 días.
+#TODO
+
+### Evolución de la semana
+
+Datos del 30/10 al 06/11/2026: 46 capturas. Cuando se habla de **precio actual**, es el de la última captura, el 06/11 a las 13:00.
+
+**Los precios han bajado todos los días.** En España, la Gasolina 95 ha bajado de media 4,4 céntimos por litro en 7 días y el Gasóleo A 2,3. El AdBlue apenas se ha movido (+0,5). En A Coruña, la media de la Gasolina 95 pasó de 1,740 €/l el 30/10 a 1,694 €/l el 06/11, y la del Gasóleo A de 1,922 a 1,901 €/l. Casi tres de cada cuatro cambios de precio de la gasolina fueron bajadas.
 
 ### En la provincia de A Coruña
 
-**Los pueblos son más caros, pero sobre todo por las marcas que hay en ellos.** Las 10 estaciones más baratas de Gasóleo A y Gasolina 95 están en el área metropolitana (Cambre, Culleredo, Oleiros, Arteixo y A Coruña) y todas son de cadenas *low-cost*: Petroprix, Plenergy, Ballenoil, Carbugal, Petrocash y TNS. Las 10 más caras son casi todas de Repsol y Cepsa, en municipios pequeños como Padrón, A Pobra do Caramiñal, A Capela, Coirós o Melide, pero también en Ferrol y Narón.
+**Los pueblos son más caros, pero sobre todo por las marcas que hay en ellos.** Las 10 estaciones más baratas de Gasóleo A y Gasolina 95 están en el área de A Coruña y en Santiago (Cambre, Culleredo, Oleiros, A Coruña y Santiago de Compostela) y todas son de cadenas *low-cost*: Petroprix, Plenergy, Ballenoil, Carbugal y TNS. Las 10 más caras de Gasolina 95 están en municipios pequeños, como Val do Dubra, Muros, Trazo, Carnota, Cerdido o Cariño. En Gasóleo A, las más caras son casi todas Repsol, tanto en pueblos (Muros, Coirós) como en Ferrol, Santiago o Culleredo.
 
 Gasóleo A según el tamaño del municipio:
 
-| Municipio | Precio medio | Estaciones de marcas tradicionales |
+| Municipio | Precio actual | Estaciones de marcas tradicionales |
 |---|---|---|
-| 1-2 estaciones | 1,934 €/l | 51 % |
-| 3-5 estaciones | 1,941 €/l | 55 % |
-| 6-15 estaciones (Arteixo, Oleiros, Culleredo, Cambre…) | **1,880 €/l** | **39 %** |
-| Más de 15 estaciones (A Coruña, Santiago) | 1,896 €/l | 54 % |
+| 1-2 estaciones | 1,925 €/l | 51 % |
+| 3-5 estaciones | 1,927 €/l | 55 % |
+| 6-15 estaciones (Arteixo, Oleiros, Culleredo, Cambre…) | **1,870 €/l** | **39 %** |
+| Más de 15 estaciones (A Coruña, Santiago) | 1,879 €/l | 54 % |
 
 Marcas tradicionales: Repsol, Cepsa, Moeve, Galp, BP y Shell.
 
-Los municipios pequeños son unos 5 céntimos más caros que los medianos. Los más baratos no son las ciudades, sino los municipios de su alrededor, que es donde menos peso tienen las marcas tradicionales.
+Los municipios pequeños son unos 5-6 céntimos más caros que los medianos. Los más baratos no son las ciudades, sino los municipios de su alrededor, que es donde menos peso tienen las marcas tradicionales.
 
 **Con la misma marca, depende de la marca:**
 
-- **Repsol, Cepsa y Moeve cobran casi lo mismo en todas partes.** En Gasóleo A, Repsol va de 1,975 a 1,989 €/l y Moeve de 1,975 a 1,985 €/l, sea cual sea el tamaño del municipio. Parece un precio fijado por la marca, no por la competencia local.
-- **Galp y Shell bajan el precio en los municipios grandes.** Galp pasa de 1,968 €/l en los municipios con 1-2 estaciones a 1,875 €/l en los de más de 15, unos 9 céntimos menos. Shell pasa de 1,961 a 1,899 €/l. Estas marcas sí parecen adaptar el precio a la competencia.
-- Las cadenas *low-cost* tienen más dispersión: Plenergy va de 1,679 a 1,889 €/l y Valcarce, de 1,779 a 1,999 €/l.
+- **Repsol, Cepsa y Moeve cobran casi lo mismo en todas partes.** En Gasóleo A, Repsol va de 1,962 a 1,971 €/l y Moeve de 1,961 a 1,970 €/l, sea cual sea el tamaño del municipio. Parece un precio fijado por la marca, no por la competencia local.
+- **Galp y Shell bajan el precio en los municipios grandes.** Galp pasa de 1,968 €/l en los municipios con 1-2 estaciones a 1,857 €/l en los de más de 15, unos 11 céntimos menos. Shell pasa de 1,956 a 1,889 €/l. Estas marcas sí parecen adaptar el precio a la competencia.
+- Las cadenas *low-cost* tienen más dispersión: Plenergy va de 1,679 a 1,895 €/l y Valcarce, de 1,779 a 1,999 €/l.
 
-**AdBlue: la mayor dispersión.** Va de 0,72 a 1,42 €/l en la provincia: la más cara cuesta casi el doble que la más barata. Las estaciones Repsol lo venden todas a 1,359 €/l, y varias de pueblo (Ortigueira, Coirós, Betanzos) están entre las más baratas. Aquí no se cumple que el pueblo sea más caro.
+**AdBlue: la mayor dispersión.** Va de 0,72 a 1,42 €/l en la provincia: la más cara cuesta casi el doble que la más barata. Casi todas las estaciones Repsol de Santiago, A Coruña, Teo y Padrón lo venden a 1,359 €/l, y varias de pueblo (San Sadurniño, Betanzos, Coirós, Ortigueira) están entre las más baratas. Aquí no se cumple que el pueblo sea más caro.
 
 **Los tres productos según el tamaño del municipio.** Esta tabla sale de la página «Galicia y A Coruña» del informe: es el precio medio de todo el periodo frente a la media de la provincia de A Coruña, en céntimos por litro. Por eso sus cifras no coinciden exactamente con la tabla anterior, que usa solo la última captura.
 
 | Municipio | Gasóleo A | Gasolina 95 | AdBlue |
 |---|---|---|---|
-| 1-2 estaciones | +2,3 | +2,4 | +1,7 |
+| 1-2 estaciones | +2,3 | +2,5 | +1,7 |
 | 3-5 estaciones | +2,8 | +2,5 | −1,7 |
 | 6-15 estaciones | **−3,3** | −2,2 | **−8,7** |
-| Más de 15 estaciones | −1,3 | **−2,8** | **+11,7** |
+| Más de 15 estaciones | −1,4 | **−3,0** | **+11,6** |
 
 - En **gasóleo y gasolina**, los municipios pequeños son unos 5-6 céntimos más caros que los medianos.
 - En **AdBlue** ocurre al revés: los municipios con más de 15 estaciones son los más caros. Coincide con que allí hay muchas estaciones Repsol, que lo venden a 1,359 €/l.
-- **Ortigueira** es un buen ejemplo. Está 4,3 céntimos por encima de la media de la provincia en Gasóleo A y 9,7 en Gasolina 95, pero 20,7 céntimos por debajo en AdBlue.
+- **Ortigueira** es un buen ejemplo. Está 4,5 céntimos por encima de la media de la provincia en Gasóleo A y 10,2 en Gasolina 95, pero 20,8 céntimos por debajo en AdBlue.
 
 ### En Galicia
 
-- **Lugo es la provincia gallega más cara** en Gasóleo A (+2,5 céntimos frente a la media de Galicia) y en Gasolina 95 (+1,4).
-- En AdBlue el orden cambia: Pontevedra es la más cara (+3,2) y Lugo la más barata (−3,9).
+- **Lugo es la provincia gallega más cara** en Gasóleo A (+2,5 céntimos frente a la media de Galicia) y en Gasolina 95 (+1,5).
+- En AdBlue el orden cambia: Pontevedra es la más cara (+3,2) y Lugo la más barata (−3,8).
 
 ### En España
 
-- La Gasolina 95 más barata está en Canarias (Las Palmas, 1,524 €/l), que tiene una fiscalidad propia.
-- En Gasóleo A, las provincias más baratas son Melilla (1,672 €/l) y Las Palmas (1,679 €/l).
-- A Coruña está a media tabla: puesto 34 de 52 en Gasóleo A (1,912 €/l) y 26 de 52 en Gasolina 95 (1,712 €/l).
-- **La cornisa cantábrica es de las zonas más caras en Gasolina 95.** En la península y Baleares, las comunidades más caras son Illes Balears (1,802 €/l), Asturias (1,773 €/l), Cantabria (1,750 €/l) y País Vasco (1,744 €/l), frente a una mediana de 1,739 €/l. No se explica por las marcas: en Cantabria el 52 % de las estaciones son de marcas tradicionales, una proporción parecida a la de A Coruña.
+- La Gasolina 95 más barata está en Canarias (Las Palmas, 1,513 €/l), que tiene una fiscalidad propia.
+- En Gasóleo A, las provincias más baratas son Las Palmas (1,675 €/l) y Melilla (1,683 €/l).
+- A Coruña está a media tabla: puesto 35 de 52 en Gasóleo A (1,900 €/l) y 28 de 52 en Gasolina 95 (1,692 €/l).
+- **La cornisa cantábrica es de las zonas más caras en Gasolina 95.** En la península y Baleares, las comunidades más caras son Illes Balears (1,780 €/l), Asturias (1,748 €/l), Cantabria (1,718 €/l) y País Vasco (1,715 €/l), frente a una mediana de 1,697 €/l. No se explica por las marcas: en Cantabria el 52 % de las estaciones son de marcas tradicionales, una proporción parecida a la de Galicia (54 %).
 
 ### Canarias
 
-**Las islas pequeñas son las más caras**: hasta 29 céntimos más que Gran Canaria en Gasolina 95. La isla se ha deducido de las coordenadas de cada estación.
+**Las islas pequeñas son las más caras**: hasta 30 céntimos más que Gran Canaria en Gasolina 95. La isla se ha deducido de las coordenadas de cada estación.
 
 | Isla | Estaciones | Gasolina 95 | Gasóleo A |
 |---|---|---|---|
 | La Gomera | 7 | 1,801 €/l | 1,978 €/l |
-| El Hierro | 4 | 1,784 €/l | 1,965 €/l |
-| La Palma | 20 | 1,682 €/l | 1,879 €/l |
-| Lanzarote | 47 | 1,570 €/l | 1,708 €/l |
-| Tenerife | 211 | 1,564 €/l | 1,723 €/l |
-| Fuerteventura | 27 | 1,526 €/l | 1,667 €/l |
-| Gran Canaria | 182 | 1,512 €/l | 1,674 €/l |
+| El Hierro | 4 | 1,784 €/l | 1,970 €/l |
+| La Palma | 20 | 1,666 €/l | 1,877 €/l |
+| Tenerife | 210 | 1,557 €/l | 1,719 €/l |
+| Lanzarote | 47 | 1,545 €/l | 1,703 €/l |
+| Fuerteventura | 27 | 1,520 €/l | 1,661 €/l |
+| Gran Canaria | 182 | 1,504 €/l | 1,670 €/l |
 
-- **Las cadenas *low-cost* solo están en Gran Canaria.** Las 10 estaciones más baratas de Canarias están allí, en Ingenio, Las Palmas y Agüimes, y casi todas son Plenergy, Petroprix u otras independientes, a unos 1,35 €/l.
+- **Las cadenas *low-cost* se concentran en Gran Canaria.** 9 de las 10 estaciones más baratas de Canarias están allí, en Ingenio y Las Palmas, y la otra en Arrecife (Lanzarote). Casi todas son Plenergy, Petroprix, Santana u otras independientes, entre 1,345 y 1,38 €/l.
 - **En las islas pequeñas domina una sola marca.** DISA tiene 3 de las 4 estaciones de El Hierro y 4 de las 7 de La Gomera, mientras que en Tenerife y Gran Canaria compiten DISA, BP, Repsol, Moeve, Shell y otras.
-- **El número de estaciones no lo explica todo.** Tenerife, con 211 estaciones, es algo más cara que Fuerteventura, con 27. Probablemente también influye la doble insularidad: el combustible llega primero a Gran Canaria y Tenerife y desde ahí se reenvía por barco a las islas sin refinería ni puerto principal. Este coste no se puede medir con los datos de la API.
+- **El número de estaciones no lo explica todo.** Tenerife, con 210 estaciones, es algo más cara que Fuerteventura, con 27. Probablemente también influye la doble insularidad: el combustible llega primero a Gran Canaria y Tenerife y desde ahí se reenvía por barco a las islas sin refinería ni puerto principal. Este coste no se puede medir con los datos de la API.
 
 ### Cuándo cambian los precios
 
-Datos de toda España del 30/10 al 05/11, página «Cuándo cambian los precios». Los gráficos por hora usan solo las 8 capturas regulares del Worker: 01:00, 04:00, 07:00, 10:00, 13:00, 16:00, 19:00 y 22:00 (hora peninsular).
+Datos de toda España del 30/10 al 06/11, página «Cuándo cambian los precios». Los gráficos por hora usan solo las 8 capturas regulares del Worker: 01:00, 04:00, 07:00, 10:00, 13:00, 16:00, 19:00 y 22:00 (hora peninsular).
 
 | Indicador | Gasolina 95 | Gasóleo A | AdBlue |
 |---|---|---|---|
-| Cambios de precio | 33.572 | 31.681 | 285 |
-| Cambios que hace el 10 % de estaciones más activas | 51 % | 53 % | 100 % |
-| Estaciones sin ningún cambio | 24 % | 31 % | 91 % |
-| Estaciones que cambian todos los días | 473 | 463 | 0 |
-| Magnitud media del cambio | 1,5 cént/l | 1,2 cént/l | 4,3 cént/l |
+| Cambios de precio | 46.073 | 43.004 | 357 |
+| Bajadas | 72 % | 66 % | 9 % |
+| Cambios que hace el 10 % de estaciones más activas | 48 % | 51 % | 86 % |
+| Estaciones sin ningún cambio | 15 % | 21 % | 88 % |
+| Estaciones que cambian todos los días | 747 | 600 | 0 |
+| Magnitud media del cambio | 1,6 cént/l | 1,3 cént/l | 5,0 cént/l |
 
-**La hora del día prácticamente no influye en el precio.** El gráfico «¿Influye la hora en el precio?» muestra las primeras horas del día algo por encima de la media diaria y las últimas algo por debajo. La diferencia es de unos 0,4 céntimos en gasolina y 0,1 en gasóleo. Pero no es un efecto de la hora, sino de la tendencia de la semana: los precios bajaron todos los días (la media de la Gasolina 95 en A Coruña pasó de 1,740 €/l el 30/10 a 1,713 €/l el 04/11). Cuando el precio baja a lo largo del día, las horas tempranas siempre quedan por encima de la media de ese día y las tardías por debajo. Si fuera un ciclo diario, en la captura de la 01:00 habría sobre todo subidas, y lo que hay son bajadas. Para medir el efecto real de la hora harían falta semanas en las que los precios suban y bajen.
+**La hora del día prácticamente no influye en el precio.** El gráfico «¿Influye la hora en el precio?» muestra las primeras horas del día algo por encima de la media diaria y las últimas algo por debajo. La diferencia es de unos 0,5 céntimos en gasolina y 0,2 en gasóleo. Pero no es un efecto de la hora, sino de la tendencia de la semana: los precios bajaron todos los días. Cuando el precio baja a lo largo del día, las horas tempranas siempre quedan por encima de la media de ese día y las tardías por debajo. Si fuera un ciclo diario, en la captura de la 01:00 habría sobre todo subidas, y lo que hay son bajadas. Para medir el efecto real de la hora harían falta semanas en las que los precios suban y bajen.
 
 **Lo que sí se ve es cuándo actualizan los precios las estaciones:**
 
-- Sobre todo alrededor de medianoche: la captura de la 01:00, que recoge los cambios de las 22:00 a la 01:00, tiene muchas bajadas.
-- A mediodía y por la tarde, en las capturas de las 13:00 y las 16:00.
-- Casi nada de madrugada ni a primera hora, en las capturas de las 04:00 a las 10:00.
+- Sobre todo alrededor de medianoche: la captura de la 01:00, que recoge los cambios de las 22:00 a la 01:00, es la que más cambios tiene, casi todos bajadas.
+- A mediodía y por la tarde, en las capturas de las 13:00, las 16:00 y las 19:00.
+- Muy pocos a primera hora: la captura de las 07:00 es la que menos cambios recoge.
 
-**Son siempre las mismas estaciones las que cambian.** El 10 % más activo hace más de la mitad de los cambios, y unas 470 estaciones han cambiado el precio todos los días. Las 15 estaciones que más cambian lo hacen unas 3 veces al día y todas son Galp o Repsol. En cambio, una de cada cuatro estaciones no ha cambiado el precio en toda la semana.
+**Son siempre las mismas estaciones las que cambian.** El 10 % más activo hace la mitad de los cambios, y entre 600 y 750 estaciones han cambiado el precio todos los días. Las 15 estaciones que más cambian lo hacen entre 26 y 30 veces en 8 días, unas 3-4 veces al día, y casi todas son Galp o Repsol. En cambio, entre el 15 y el 21 % de las estaciones no ha cambiado el precio en toda la semana.
 
-**Las marcas tradicionales cambian mucho más que las *low-cost*.** Cambios por estación en Gasolina 95:
+**Galp, Moeve y Repsol cambian mucho más que las *low-cost*.** Cambios por estación en Gasolina 95:
 
 | Marcas tradicionales | Cambios | *Low-cost* | Cambios |
 |---|---|---|---|
-| Galp | 7,8 | Plenergy | 2,2 |
-| Moeve | 7,4 | Petroprix | 1,5 |
-| Repsol | 5,4 | Ballenoil | 1,1 |
-| Petronor | 4,7 | | |
+| Galp | 10,7 | Plenergy | 3,5 |
+| Moeve | 9,5 | Petroprix | 2,4 |
+| Repsol | 7,1 | Ballenoil | 2,0 |
+| Petronor | 6,3 | | |
 
-Las *low-cost* mantienen un precio bajo y estable. Las marcas tradicionales lo ajustan varias veces al día en pasos pequeños, de 1 o 2 céntimos. Encaja con lo visto en A Coruña: Repsol cobra lo mismo en pueblos y ciudades, pero cambia el precio muchas veces a lo largo del día.
+Las *low-cost* mantienen un precio bajo y estable. Galp, Moeve y Repsol lo ajustan varias veces al día en pasos pequeños, de 1 o 2 céntimos. No todas las marcas tradicionales lo hacen: Cepsa (3,6), BP (3,0) y Shell (2,2) cambian tan poco como las *low-cost*. Encaja con lo visto en A Coruña: Repsol cobra lo mismo en pueblos y ciudades, pero cambia el precio muchas veces a lo largo del día.
 
-**El AdBlue tiene un precio casi fijo.** Solo hubo 285 cambios en toda España, y el 91 % de las estaciones no lo cambió nunca. Por eso el 100 % del indicador del 10 % más activo no significa nada: si casi ninguna estación cambia, todos los cambios los hacen por fuerza unas pocas. Con tan pocos cambios no se puede sacar ningún patrón horario.
+**El AdBlue tiene un precio casi fijo.** Solo hubo 357 cambios en toda España, y el 88 % de las estaciones no lo cambió nunca. Además, 9 de cada 10 cambios fueron subidas, al revés que en los carburantes. Por eso el 86 % del indicador del 10 % más activo no significa mucho: si casi ninguna estación cambia, casi todos los cambios los hacen por fuerza unas pocas. Con tan pocos cambios no se puede sacar ningún patrón horario.
 
 ### Marcas y territorio
 
-Datos de toda España del 30/10 al 05/11, página «Marcas y territorio».
+Datos de toda España del 30/10 al 06/11, página «Marcas y territorio».
 
-**Las marcas solo se pueden comparar dentro de la misma zona fiscal.** Al comparar con toda España, DISA aparecía entre las marcas más baratas (−15,7 céntimos en gasóleo), pero sus 138 estaciones están en Canarias y en Ceuta y Melilla, donde los impuestos son más bajos. Por eso el gráfico de marcas se filtra solo a la península y Baleares, y la diferencia se calcula con la media de esa misma zona.
+**Las marcas solo se pueden comparar dentro de la misma zona fiscal.** Al comparar con toda España, DISA aparecía entre las marcas más baratas (−15,5 céntimos en gasóleo), pero sus 138 estaciones están en Canarias y en Ceuta y Melilla, donde los impuestos son más bajos. Por eso el gráfico de marcas se filtra solo a la península y Baleares, y la diferencia se calcula con la media de esa misma zona.
 
 Diferencia de cada marca con la media de la península y Baleares, en céntimos por litro:
 
 | Marca | Gasolina 95 | Gasóleo A |
 |---|---|---|
-| Bonàrea | — | **−19,0** |
-| Esclatoil | **−17,0** | −12,1 |
-| Plenergy | −12,6 | −13,9 |
-| Petroprix | −10,9 | −13,7 |
-| Ballenoil | −10,4 | −13,0 |
+| Bonàrea | — | **−19,3** |
+| Esclatoil | **−17,7** | −12,1 |
+| Plenergy | −12,7 | −13,8 |
+| Petroprix | −10,9 | −13,6 |
+| Ballenoil | −10,4 | −12,8 |
 | Q8 | −1,0 | −2,5 |
-| Shell | +0,5 | −1,2 |
-| Avia | +0,4 | +0,4 |
+| Shell | +0,6 | −1,1 |
+| Avia | +0,5 | +0,4 |
 | Galp | +2,2 | +2,6 |
-| Carrefour | +3,4 | +2,3 |
-| BP | +5,1 | +7,6 |
-| Petronor | +5,1 | +7,5 |
-| Repsol | +5,4 | +8,0 |
-| Moeve | +6,1 | **+8,8** |
-| Cepsa | **+6,6** | +8,4 |
+| Carrefour | +3,3 | +2,3 |
+| BP | +5,1 | +7,5 |
+| Petronor | +5,2 | +7,4 |
+| Repsol | +5,5 | +7,9 |
+| Moeve | +6,0 | **+8,6** |
+| Cepsa | **+6,6** | +8,3 |
 
 Bonàrea no está entre las 15 marcas con más estaciones de Gasolina 95.
 
@@ -359,9 +390,9 @@ Bonàrea no está entre las 15 marcas con más estaciones de Gasolina 95.
 - Galp, Shell, Avia y Q8 quedan cerca de la media, entre los dos grupos. Galp y Shell son también las que bajaban el precio en las ciudades de A Coruña.
 - **En AdBlue las diferencias entre marcas son mucho mayores:** van de Bonàrea (−44) y Esclatoil (−41) a Shell (+36) y Repsol (+22). Repsol vuelve a ser de las más caras, como en A Coruña.
 
-**Zona fiscal.** En gasolina y gasóleo, Canarias es unos 17-19 céntimos más barata que la media, y Ceuta y Melilla entre 12 y 19, por sus impuestos propios. **El AdBlue va al revés: en Canarias cuesta 1,53 €/l, frente a 0,94 €/l en la península (+57 céntimos).** Probablemente se debe a que no tiene la ventaja fiscal de los carburantes y hay que transportarlo hasta las islas. El dato de Ceuta y Melilla (+25 céntimos) no es fiable, porque solo hay una estación con AdBlue.
+**Zona fiscal.** En gasolina y gasóleo, Canarias es unos 16-18 céntimos más barata que la media, y Ceuta y Melilla entre 11 y 19, por sus impuestos propios. **El AdBlue va al revés: en Canarias cuesta 1,53 €/l, frente a 0,94 €/l en la península (+57 céntimos sobre la media).** Probablemente se debe a que no tiene la ventaja fiscal de los carburantes y hay que transportarlo hasta las islas. El dato de Ceuta y Melilla (+25 céntimos) no es fiable, porque solo hay una estación con AdBlue.
 
-**El gasóleo es más caro que la gasolina en todas las comunidades**, entre 15,7 y 20,0 céntimos por litro. Galicia tiene la mayor diferencia (+20,0) y Canarias la menor (+15,7). Este gráfico no depende del producto seleccionado, porque siempre compara los dos carburantes.
+**El gasóleo es más caro que la gasolina en todas las comunidades**, entre 15,0 y 20,3 céntimos por litro. Galicia tiene la mayor diferencia (+20,3), y Ceuta (+15,0) y la Comunitat Valenciana (+15,1) la menor. Melilla queda aparte (+6,3), con muy pocas estaciones. Este gráfico no depende del producto seleccionado, porque siempre compara los dos carburantes.
 
 ### Misma marca, distinto lugar
 
@@ -371,17 +402,17 @@ Precio actual de la provincia de A Coruña, página «Misma marca, distinto luga
 
 | Marca | 1-2 estaciones | 3-5 | 6-15 | Más de 15 | Diferencia |
 |---|---|---|---|---|---|
-| Repsol | 1,976 | 1,986 | 1,975 | 1,982 | ~1 céntimo |
-| Moeve | 1,970 | 1,972 | 1,973 | 1,965 | ~1 céntimo |
-| Cepsa | 1,969 | 1,985 | 1,980 | 1,948 | 2-4 céntimos |
-| Shell | 1,961 | 1,946 | 1,901 | 1,899 | −6 céntimos |
-| Galp | 1,968 | 1,954 | 1,905 | 1,875 | −9 céntimos |
+| Repsol | 1,965 | 1,971 | 1,962 | 1,969 | ~1 céntimo |
+| Moeve | 1,970 | 1,970 | 1,961 | 1,970 | ~1 céntimo |
+| Cepsa | 1,961 | 1,975 | 1,966 | 1,945 | 1-3 céntimos |
+| Shell | 1,956 | 1,939 | 1,901 | 1,889 | −7 céntimos |
+| Galp | 1,968 | 1,944 | 1,894 | 1,857 | −11 céntimos |
 
-**Gasolina 95: casi todas las marcas bajan en los municipios grandes, menos Repsol.** Repsol se mantiene entre 1,727 y 1,751 €/l. Cepsa baja 9 céntimos (de 1,792 a 1,699 €/l), Galp 10 (de 1,745 a 1,645 €/l), y Shell y Moeve entre 5 y 6. En gasolina hay más competencia en precio que en gasóleo.
+**Gasolina 95: casi todas las marcas bajan en los municipios grandes, menos Repsol.** Repsol se mantiene entre 1,708 y 1,730 €/l. Galp baja 12 céntimos (de 1,745 a 1,627 €/l), Shell 7 (de 1,752 a 1,679 €/l) y Cepsa 6 (de 1,767 a 1,705 €/l). Moeve apenas baja 2. En gasolina hay más competencia en precio que en gasóleo.
 
 **Plenergy es la más barata en todos los tamaños de municipio y no tiene estaciones en los municipios más pequeños**, lo que confirma que las cadenas *low-cost* no están en los pueblos.
 
-**Repsol tiene un precio casi único en toda la provincia.** En Gasóleo A, sus 67 estaciones solo varían unos 8 céntimos entre la más barata y la más cara (de 1,947 a 2,025 €/l). Galp, con 21 estaciones, varía 24 céntimos, y Plenergy, 21. Repsol fija un precio de marca, mientras que Galp y las *low-cost* lo adaptan a la competencia de cada zona.
+**Repsol, Cepsa y Moeve tienen un precio casi único en toda la provincia.** En Gasóleo A, las 67 estaciones Repsol solo varían unos 12 céntimos entre la más barata y la más cara (de 1,899 a 2,015 €/l), las 25 de Cepsa 7 y las 15 de Moeve 5. Galp, con 21 estaciones, varía 24 céntimos, y Plenergy, 22. Estas marcas fijan un precio de marca, mientras que Galp y las *low-cost* lo adaptan a la competencia de cada zona.
 
 **En AdBlue, Repsol es la más cara y su patrón va al revés.** Cobra 1,359 €/l en los municipios medianos y grandes, y bastante menos en los pequeños (1,028 €/l en los de 3-5 estaciones). Es la marca que más varía, de 0,799 a 1,359 €/l. Galp y Moeve rondan 1,00 €/l en todas partes. En el mapa, casi todas las estaciones salen en verde y las más caras se concentran en A Coruña y Santiago. Moeve y Shell solo tienen 3 estaciones con AdBlue en la provincia, así que sus cifras son poco fiables.
 
@@ -394,9 +425,26 @@ Los colores del mapa son relativos a cada producto: verde para el precio más ba
 
 Esos dos precios de AdBlue son estables en todas las capturas y están dentro del rango válido definido en SILVER (de 0,30 a 3,00 €/l). Una explicación posible es que esas estaciones publiquen el precio del AdBlue en garrafa, que es más caro que el de surtidor. Para ver el precio exacto de una estación, hay que pasar el ratón por encima.
 
+### Calidad del dato: precios sospechosos y saltos
+
+Se revisó todo el histórico (46 capturas, del 30/10 al 06/11/2026) por si hacía falta una página de Power BI dedicada a los precios anómalos. No hace falta: casi no hay casos.
+
+| Producto | Precios analizados | Fuera del rango plausible | Estaciones afectadas |
+|---|---:|---:|---:|
+| Gasóleo A | 516.652 | 0 | 0 |
+| Gasolina 95 | 500.933 | 0 | 0 |
+| AdBlue | 135.409 | 46 | 1 |
+
+- **Gasóleo A y Gasolina 95:** ningún precio sale del rango de 0,80 a 3,50 €/l. Todos están entre 1,345 y 2,299 €/l.
+- **AdBlue:** solo BP CAMPANAR (Valencia), con 3,413 €/l en las 46 capturas, por encima del máximo de 3,00 €/l. Como el precio no varía, parece un precio real muy alto (posiblemente AdBlue en garrafa) y no un error puntual de la API. Se conserva en SILVER marcado como sospechoso y no entra en las medias del informe.
+- **Saltos de más de 25 céntimos:** solo 6 en toda la semana (5 en Gasolina 95 y 1 en Gasóleo A), cada uno en una estación distinta y todos bajadas. El mayor es el de Peñarroya de Tastavins, de 1,858 a 1,381 €/l.
+
+Los controles de calidad funcionan, pero los datos de la API son muy limpios. Por eso no se dedica una página del informe a este tema. Las consultas de detalle están en [sql/05_checks.sql](sql/05_checks.sql).
+
 ### Limitaciones
 
-- Es una sola captura. Los precios cambian varias veces al día, así que hay que confirmar estos resultados con más días.
+- Es solo una semana de datos, en la que los precios bajaron todos los días. Patrones como el efecto de la hora necesitan más semanas, con subidas y bajadas.
+- Faltan 12 franjas de 3 horas entre el 30/10 y el 02/11, cuando la ingesta dependía solo del cron de GitHub. Desde que se añadió el Worker de Cloudflare no falta ninguna.
 - El tamaño del municipio se aproxima por su número de estaciones, no por su población.
 - Algunos grupos tienen pocas estaciones. Por ejemplo, solo hay 2 Moeve en municipios de más de 15 estaciones, así que sus medias son poco fiables.
 
