@@ -1,0 +1,35 @@
+/// Calendario limitado a los días con datos (vista GOLD.v_pbi_dim_fecha).
+table DIM_FECHA
+	lineageTag: 0d8e4f55-2f2b-4efc-85ee-89aeb7859c1c
+
+	column DATE_KEY
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: dc6b514e-5471-4846-82cc-1315ed44a80e
+		summarizeBy: none
+		sourceColumn: DATE_KEY
+
+	column Fecha
+		dataType: dateTime
+		formatString: dd/mm/yyyy
+		lineageTag: c0af0092-763f-4460-9b82-5c501ea9fc7c
+		summarizeBy: none
+		sourceColumn: FECHA
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	partition DIM_FECHA = m
+		mode: import
+		source =
+				let
+				    Origen = Snowflake.Databases(#"Servidor Snowflake", #"Warehouse Snowflake", [Role = "SYSADMIN", Implementation = "2.0"]),
+				    BaseDatos = Origen{[Name = "CARBURANTES_DB", Kind = "Database"]}[Data],
+				    Esquema = BaseDatos{[Name = "GOLD", Kind = "Schema"]}[Data],
+				    Vista = Esquema{[Name = "V_PBI_DIM_FECHA", Kind = "View"]}[Data],
+				  #"Tipo de columna cambiado" = Table.TransformColumnTypes(Vista, {{"DATE_KEY", Int64.Type}})
+				in
+				    #"Tipo de columna cambiado"
+
+	annotation PBI_ResultType = Table
+

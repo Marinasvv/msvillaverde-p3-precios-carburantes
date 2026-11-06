@@ -1,0 +1,33 @@
+/// Una fila por hora del día, en hora peninsular (vista GOLD.v_pbi_dim_hora).
+table DIM_HORA
+	lineageTag: 716d44c1-abd7-4ac7-840e-aa84d246b98b
+
+	column HORA_KEY
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: a8eb382a-ef1c-4355-b3f1-e7908dd8ccd2
+		summarizeBy: none
+		sourceColumn: HORA_KEY
+
+	column 'Hora del día'
+		dataType: string
+		lineageTag: e2e97385-3194-48db-bbdc-93d3689dc9ef
+		summarizeBy: none
+		sourceColumn: HORA_DEL_DIA
+		sortByColumn: HORA_KEY
+
+	partition DIM_HORA = m
+		mode: import
+		source =
+				let
+				    Origen = Snowflake.Databases(#"Servidor Snowflake", #"Warehouse Snowflake", [Role = "SYSADMIN", Implementation = "2.0"]),
+				    BaseDatos = Origen{[Name = "CARBURANTES_DB", Kind = "Database"]}[Data],
+				    Esquema = BaseDatos{[Name = "GOLD", Kind = "Schema"]}[Data],
+				    Vista = Esquema{[Name = "V_PBI_DIM_HORA", Kind = "View"]}[Data],
+				  #"Tipo de columna cambiado" = Table.TransformColumnTypes(Vista, {{"HORA_KEY", Int64.Type}})
+				in
+				    #"Tipo de columna cambiado"
+
+	annotation PBI_ResultType = Table
+

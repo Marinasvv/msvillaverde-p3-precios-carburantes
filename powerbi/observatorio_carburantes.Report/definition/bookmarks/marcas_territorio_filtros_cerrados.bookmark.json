@@ -1,0 +1,121 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/bookmark/2.1.0/schema.json",
+  "displayName": "Marcas y territorio - filtros cerrados",
+  "name": "marcas_territorio_filtros_cerrados",
+  "options": {
+    "applyOnlyToTargetVisuals": true,
+    "targetVisualNames": [
+      "marcas_territorio_panel_fondo",
+      "marcas_territorio_panel_titulo",
+      "marcas_territorio_panel_cerrar",
+      "marcas_territorio_panel_ccaa",
+      "marcas_territorio_panel_provincia",
+      "marcas_territorio_panel_municipio",
+      "marcas_territorio_panel_marca",
+      "marcas_territorio_panel_zona",
+      "marcas_territorio_panel_fecha",
+      "marcas_territorio_panel_nota"
+    ],
+    "suppressData": true
+  },
+  "explorationState": {
+    "version": "1.0",
+    "activeSection": "marcas_territorio",
+    "sections": {
+      "marcas_territorio": {
+        "visualContainers": {
+          "marcas_territorio_panel_fondo": {
+            "singleVisual": {
+              "visualType": "shape",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_titulo": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_cerrar": {
+            "singleVisual": {
+              "visualType": "actionButton",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_ccaa": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_provincia": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_municipio": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_marca": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_zona": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_fecha": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "marcas_territorio_panel_nota": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

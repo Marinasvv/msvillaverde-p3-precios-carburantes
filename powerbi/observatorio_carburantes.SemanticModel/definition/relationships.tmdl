@@ -1,0 +1,24 @@
+relationship precio_estacion
+	fromColumn: FACT_PRECIO.STATION_SK
+	toColumn: DIM_ESTACION.STATION_SK
+
+relationship precio_producto
+	fromColumn: FACT_PRECIO.PRODUCT_SK
+	toColumn: DIM_PRODUCTO.PRODUCT_SK
+
+relationship precio_fecha
+	fromColumn: FACT_PRECIO.DATE_KEY
+	toColumn: DIM_FECHA.DATE_KEY
+
+relationship precio_hora
+	fromColumn: FACT_PRECIO.HORA_KEY
+	toColumn: DIM_HORA.HORA_KEY
+
+relationship resumen_estacion
+	fromColumn: RESUMEN_ESTACION.STATION_SK
+	toColumn: DIM_ESTACION.STATION_SK
+
+relationship resumen_producto
+	fromColumn: RESUMEN_ESTACION.PRODUCT_SK
+	toColumn: DIM_PRODUCTO.PRODUCT_SK
+

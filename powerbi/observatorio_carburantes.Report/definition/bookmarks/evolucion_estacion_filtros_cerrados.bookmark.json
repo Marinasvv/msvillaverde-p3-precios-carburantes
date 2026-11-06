@@ -1,0 +1,121 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/bookmark/2.1.0/schema.json",
+  "displayName": "Evolución por estación - filtros cerrados",
+  "name": "evolucion_estacion_filtros_cerrados",
+  "options": {
+    "applyOnlyToTargetVisuals": true,
+    "targetVisualNames": [
+      "evolucion_estacion_panel_fondo",
+      "evolucion_estacion_panel_titulo",
+      "evolucion_estacion_panel_cerrar",
+      "evolucion_estacion_panel_ccaa",
+      "evolucion_estacion_panel_provincia",
+      "evolucion_estacion_panel_municipio",
+      "evolucion_estacion_panel_marca",
+      "evolucion_estacion_panel_zona",
+      "evolucion_estacion_panel_fecha",
+      "evolucion_estacion_panel_nota"
+    ],
+    "suppressData": true
+  },
+  "explorationState": {
+    "version": "1.0",
+    "activeSection": "evolucion_estacion",
+    "sections": {
+      "evolucion_estacion": {
+        "visualContainers": {
+          "evolucion_estacion_panel_fondo": {
+            "singleVisual": {
+              "visualType": "shape",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_titulo": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_cerrar": {
+            "singleVisual": {
+              "visualType": "actionButton",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_ccaa": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_provincia": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_municipio": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_marca": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_zona": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_fecha": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          },
+          "evolucion_estacion_panel_nota": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {},
+              "display": {
+                "mode": "hidden"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

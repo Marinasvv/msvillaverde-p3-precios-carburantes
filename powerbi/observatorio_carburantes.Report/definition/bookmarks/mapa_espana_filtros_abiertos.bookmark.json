@@ -1,0 +1,84 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/bookmark/2.1.0/schema.json",
+  "displayName": "Mapa de precios - filtros abiertos",
+  "name": "mapa_espana_filtros_abiertos",
+  "options": {
+    "applyOnlyToTargetVisuals": true,
+    "targetVisualNames": [
+      "mapa_espana_panel_fondo",
+      "mapa_espana_panel_titulo",
+      "mapa_espana_panel_cerrar",
+      "mapa_espana_panel_ccaa",
+      "mapa_espana_panel_provincia",
+      "mapa_espana_panel_municipio",
+      "mapa_espana_panel_marca",
+      "mapa_espana_panel_fecha",
+      "mapa_espana_panel_nota"
+    ],
+    "suppressData": true
+  },
+  "explorationState": {
+    "version": "1.0",
+    "activeSection": "mapa_espana",
+    "sections": {
+      "mapa_espana": {
+        "visualContainers": {
+          "mapa_espana_panel_fondo": {
+            "singleVisual": {
+              "visualType": "shape",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_titulo": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_cerrar": {
+            "singleVisual": {
+              "visualType": "actionButton",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_ccaa": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_provincia": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_municipio": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_marca": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_fecha": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "mapa_espana_panel_nota": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

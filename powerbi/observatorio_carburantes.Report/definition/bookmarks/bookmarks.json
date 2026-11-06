@@ -1,0 +1,41 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/bookmarksMetadata/1.0.0/schema.json",
+  "items": [
+    {
+      "name": "resumen_filtros_abiertos"
+    },
+    {
+      "name": "resumen_filtros_cerrados"
+    },
+    {
+      "name": "mapa_espana_filtros_abiertos"
+    },
+    {
+      "name": "mapa_espana_filtros_cerrados"
+    },
+    {
+      "name": "evolucion_estacion_filtros_abiertos"
+    },
+    {
+      "name": "evolucion_estacion_filtros_cerrados"
+    },
+    {
+      "name": "galicia_coruna_filtros_abiertos"
+    },
+    {
+      "name": "galicia_coruna_filtros_cerrados"
+    },
+    {
+      "name": "cambios_precio_filtros_abiertos"
+    },
+    {
+      "name": "cambios_precio_filtros_cerrados"
+    },
+    {
+      "name": "marcas_territorio_filtros_abiertos"
+    },
+    {
+      "name": "marcas_territorio_filtros_cerrados"
+    }
+  ]
+}

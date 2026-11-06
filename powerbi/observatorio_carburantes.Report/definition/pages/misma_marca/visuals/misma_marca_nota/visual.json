@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "misma_marca_nota",
+  "position": {
+    "x": 1580,
+    "y": 515,
+    "z": 11000,
+    "height": 260,
+    "width": 310,
+    "tabOrder": 11000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "Compara el precio actual de cada marca en municipios de distinto tamaño de la provincia elegida. Con una sola marca seleccionada, el mapa muestra dónde vende más caro y más barato.",
+                    "textStyle": {
+                      "fontFamily": "Georgia",
+                      "fontSize": "12pt",
+                      "color": "#09124f"
+                    }
+                  }
+                ],
+                "horizontalTextAlignment": "center"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

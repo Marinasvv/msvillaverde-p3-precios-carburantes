@@ -1,0 +1,39 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "cambios_nota",
+  "position": {
+    "x": 1580,
+    "y": 315,
+    "z": 14000,
+    "height": 300,
+    "width": 310,
+    "tabOrder": 14000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "Las tarjetas de % del 10 % más activo, % sin cambios y estaciones que cambian todos los días usan todo el histórico: no responden al filtro de fechas.",
+                    "textStyle": {
+                      "fontFamily": "Georgia",
+                      "fontSize": "12pt",
+                      "color": "#09124f"
+                    }
+                  }
+                ],
+                "horizontalTextAlignment": "center"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  }
+}

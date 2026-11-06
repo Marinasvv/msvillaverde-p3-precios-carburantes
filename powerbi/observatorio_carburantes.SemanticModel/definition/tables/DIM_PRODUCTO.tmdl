@@ -1,0 +1,31 @@
+table DIM_PRODUCTO
+	lineageTag: 6594617f-b825-434a-834b-0d4b9c0dd64b
+
+	column PRODUCT_SK
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: e759e166-a9a1-42db-a007-890800c62f61
+		summarizeBy: none
+		sourceColumn: PRODUCT_SK
+
+	column Producto
+		dataType: string
+		lineageTag: 8ce4eb02-ea73-47ef-ae4c-da7911f669f1
+		summarizeBy: none
+		sourceColumn: PRODUCTO
+
+	partition DIM_PRODUCTO = m
+		mode: import
+		source =
+				let
+				    Origen = Snowflake.Databases(#"Servidor Snowflake", #"Warehouse Snowflake", [Role = "SYSADMIN", Implementation = "2.0"]),
+				    BaseDatos = Origen{[Name = "CARBURANTES_DB", Kind = "Database"]}[Data],
+				    Esquema = BaseDatos{[Name = "GOLD", Kind = "Schema"]}[Data],
+				    Vista = Esquema{[Name = "V_PBI_DIM_PRODUCTO", Kind = "View"]}[Data],
+				  #"Tipo de columna cambiado" = Table.TransformColumnTypes(Vista, {{"PRODUCT_SK", Int64.Type}})
+				in
+				    #"Tipo de columna cambiado"
+
+	annotation PBI_ResultType = Table
+

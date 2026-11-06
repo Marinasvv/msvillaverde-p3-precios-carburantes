@@ -1,0 +1,91 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/bookmark/2.1.0/schema.json",
+  "displayName": "Cuándo cambian los precios - filtros abiertos",
+  "name": "cambios_precio_filtros_abiertos",
+  "options": {
+    "applyOnlyToTargetVisuals": true,
+    "targetVisualNames": [
+      "cambios_precio_panel_fondo",
+      "cambios_precio_panel_titulo",
+      "cambios_precio_panel_cerrar",
+      "cambios_precio_panel_ccaa",
+      "cambios_precio_panel_provincia",
+      "cambios_precio_panel_municipio",
+      "cambios_precio_panel_marca",
+      "cambios_precio_panel_zona",
+      "cambios_precio_panel_fecha",
+      "cambios_precio_panel_nota"
+    ],
+    "suppressData": true
+  },
+  "explorationState": {
+    "version": "1.0",
+    "activeSection": "cambios_precio",
+    "sections": {
+      "cambios_precio": {
+        "visualContainers": {
+          "cambios_precio_panel_fondo": {
+            "singleVisual": {
+              "visualType": "shape",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_titulo": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_cerrar": {
+            "singleVisual": {
+              "visualType": "actionButton",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_ccaa": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_provincia": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_municipio": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_marca": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_zona": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_fecha": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "cambios_precio_panel_nota": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

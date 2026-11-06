@@ -1,0 +1,40 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/visualContainer/2.14.0/schema.json",
+  "name": "galicia_coruna_panel_nota",
+  "position": {
+    "x": 1500,
+    "y": 300,
+    "z": 41000,
+    "height": 90,
+    "width": 400,
+    "tabOrder": 41000
+  },
+  "visual": {
+    "visualType": "textbox",
+    "objects": {
+      "general": [
+        {
+          "properties": {
+            "paragraphs": [
+              {
+                "textRuns": [
+                  {
+                    "value": "Los filtros se mantienen al cambiar de página. Para quitar uno, usa la goma de su cabecera.",
+                    "textStyle": {
+                      "fontFamily": "Georgia",
+                      "fontSize": "11pt",
+                      "color": "#09124f"
+                    }
+                  }
+                ],
+                "horizontalTextAlignment": "center"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "drillFilterOtherVisuals": true
+  },
+  "isHidden": true
+}

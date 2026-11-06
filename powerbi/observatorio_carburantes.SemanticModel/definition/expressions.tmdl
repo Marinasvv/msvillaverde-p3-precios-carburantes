@@ -1,0 +1,11 @@
+/// Cuenta de Snowflake. Se cambia en Transformar datos > Administrar parámetros.
+expression 'Servidor Snowflake' = "tuukxpd-fx25496.snowflakecomputing.com" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 340e10e8-e111-4e1a-9f87-59d4e292d1ea
+
+	annotation PBI_ResultType = Text
+
+expression 'Warehouse Snowflake' = "CARBURANTES_WH" meta [IsParameterQuery=true, Type="Text", IsParameterQueryRequired=true]
+	lineageTag: 17c7ae09-6485-4311-a156-81e43259194f
+
+	annotation PBI_ResultType = Text
+

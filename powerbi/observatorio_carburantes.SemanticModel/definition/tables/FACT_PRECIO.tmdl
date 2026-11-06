@@ -1,0 +1,156 @@
+/// Un precio por estación, producto y captura de 3 horas (vista GOLD.v_pbi_fact_precio).
+/// Las columnas numéricas están ocultas: se analizan con las medidas de la tabla Medidas.
+table FACT_PRECIO
+	lineageTag: a0234b82-8958-4ed4-b45b-1709cab223c8
+
+	column STATION_SK
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: f8629882-6469-4e6d-95f4-91538b52a930
+		summarizeBy: none
+		sourceColumn: STATION_SK
+
+	column PRODUCT_SK
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 4fa073a4-a8f5-42cb-8a72-6e827fef1497
+		summarizeBy: none
+		sourceColumn: PRODUCT_SK
+
+	column DATE_KEY
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: c215cbb3-dcff-4f35-a2b5-1caad9fcf1e5
+		summarizeBy: none
+		sourceColumn: DATE_KEY
+
+	column HORA_KEY
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 61c9e165-407b-4df7-ada4-22c3ec6ade9f
+		summarizeBy: none
+		sourceColumn: HORA_KEY
+
+	/// Momento de la captura en hora peninsular.
+	column Captura
+		dataType: dateTime
+		formatString: dd/mm/yyyy hh:nn
+		lineageTag: d7968107-c845-4db0-b989-6117e96768ed
+		summarizeBy: none
+		sourceColumn: CAPTURA
+
+	/// Vacío si el precio se marcó como sospechoso en SILVER.
+	column 'Precio (€/l)'
+		dataType: double
+		isHidden
+		formatString: 0.000
+		lineageTag: 6f7ffbd1-9caf-4b05-9291-7b828767e880
+		summarizeBy: none
+		sourceColumn: PRECIO
+
+	/// Solo en las capturas con cambio de precio.
+	column 'Precio anterior (€/l)'
+		dataType: double
+		isHidden
+		formatString: 0.000
+		lineageTag: 4585aca8-bdb6-4e99-828c-529321185a51
+		summarizeBy: none
+		sourceColumn: PRECIO_ANTERIOR
+
+	/// Solo en las capturas con cambio de precio.
+	column 'Cambio (€/l)'
+		dataType: double
+		isHidden
+		formatString: +0.000;-0.000;0.000
+		lineageTag: 946ca845-3b07-4388-a6be-6690fc7f7a8c
+		summarizeBy: none
+		sourceColumn: CAMBIO
+
+	column 'Magnitud del cambio (€/l)'
+		dataType: double
+		isHidden
+		formatString: 0.000
+		lineageTag: 4b332bb9-d65d-41ff-9e5d-85259959ac26
+		summarizeBy: none
+		sourceColumn: MAGNITUD_CAMBIO
+
+	column 'Es cambio de precio'
+		dataType: boolean
+		isHidden
+		lineageTag: 6b5e0f30-18fb-44fd-a4cf-f0aed1642265
+		summarizeBy: none
+		sourceColumn: ES_CAMBIO
+
+	column 'Es última captura'
+		dataType: boolean
+		isHidden
+		lineageTag: a91ba0ce-e5ec-4bae-9ef6-26877ecc65af
+		summarizeBy: none
+		sourceColumn: ES_ULTIMA_CAPTURA
+
+	/// Solo en la última captura: precio actual menos el de hace 24 horas.
+	column 'Variación 24 h (€/l)'
+		dataType: double
+		isHidden
+		formatString: +0.000;-0.000;0.000
+		lineageTag: e056d5a5-4d01-4604-b401-1f799f34e838
+		summarizeBy: none
+		sourceColumn: VARIACION_24H
+
+	/// Solo en la última captura: precio actual menos el de hace 7 días.
+	column 'Variación 7 días (€/l)'
+		dataType: double
+		isHidden
+		formatString: +0.000;-0.000;0.000
+		lineageTag: 2174bdd7-fb22-4427-b1e1-a135e5c7d8b7
+		summarizeBy: none
+		sourceColumn: VARIACION_7D
+
+	/// Solo en la última captura: 1 = la más barata de su provincia.
+	column 'Puesto en la provincia'
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 120beb3f-41ff-4671-9fba-df06c22414bf
+		summarizeBy: none
+		sourceColumn: PUESTO_PROVINCIA
+
+		annotation SummarizationSetBy = User
+
+	column 'Estaciones en la provincia'
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 0ecbd3e2-67fb-4031-b69b-c46c18d7d1a1
+		summarizeBy: none
+		sourceColumn: ESTACIONES_PROVINCIA
+
+		annotation SummarizationSetBy = User
+
+	/// Precio menos la media de la misma estación ese día.
+	column 'Diferencia con la media del día (€/l)'
+		dataType: double
+		isHidden
+		formatString: +0.000;-0.000;0.000
+		lineageTag: 5486418e-209e-4d43-8fc5-f2081f7f8fb4
+		summarizeBy: none
+		sourceColumn: DIFERENCIA_MEDIA_DIA
+
+	partition FACT_PRECIO = m
+		mode: import
+		source =
+				let
+				    Origen = Snowflake.Databases(#"Servidor Snowflake", #"Warehouse Snowflake", [Role = "SYSADMIN", Implementation = "2.0"]),
+				    BaseDatos = Origen{[Name = "CARBURANTES_DB", Kind = "Database"]}[Data],
+				    Esquema = BaseDatos{[Name = "GOLD", Kind = "Schema"]}[Data],
+				    Vista = Esquema{[Name = "V_PBI_FACT_PRECIO", Kind = "View"]}[Data],
+				  #"Tipo de columna cambiado" = Table.TransformColumnTypes(Vista, {{"STATION_SK", Int64.Type}, {"PRODUCT_SK", Int64.Type}, {"DATE_KEY", Int64.Type}, {"HORA_KEY", Int64.Type}, {"PUESTO_PROVINCIA", Int64.Type}, {"ESTACIONES_PROVINCIA", Int64.Type}})
+				in
+				    #"Tipo de columna cambiado"
+
+	annotation PBI_ResultType = Table
+

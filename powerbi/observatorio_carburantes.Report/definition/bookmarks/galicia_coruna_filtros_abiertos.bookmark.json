@@ -1,0 +1,63 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/bookmark/2.1.0/schema.json",
+  "displayName": "Galicia y A Coruña - filtros abiertos",
+  "name": "galicia_coruna_filtros_abiertos",
+  "options": {
+    "applyOnlyToTargetVisuals": true,
+    "targetVisualNames": [
+      "galicia_coruna_panel_fondo",
+      "galicia_coruna_panel_titulo",
+      "galicia_coruna_panel_cerrar",
+      "galicia_coruna_panel_marca",
+      "galicia_coruna_panel_fecha",
+      "galicia_coruna_panel_nota"
+    ],
+    "suppressData": true
+  },
+  "explorationState": {
+    "version": "1.0",
+    "activeSection": "galicia_coruna",
+    "sections": {
+      "galicia_coruna": {
+        "visualContainers": {
+          "galicia_coruna_panel_fondo": {
+            "singleVisual": {
+              "visualType": "shape",
+              "objects": {}
+            }
+          },
+          "galicia_coruna_panel_titulo": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {}
+            }
+          },
+          "galicia_coruna_panel_cerrar": {
+            "singleVisual": {
+              "visualType": "actionButton",
+              "objects": {}
+            }
+          },
+          "galicia_coruna_panel_marca": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "galicia_coruna_panel_fecha": {
+            "singleVisual": {
+              "visualType": "slicer",
+              "objects": {}
+            }
+          },
+          "galicia_coruna_panel_nota": {
+            "singleVisual": {
+              "visualType": "textbox",
+              "objects": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}

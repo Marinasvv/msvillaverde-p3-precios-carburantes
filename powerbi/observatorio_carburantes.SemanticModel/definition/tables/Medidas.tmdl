@@ -1,0 +1,384 @@
+/// Medidas del informe. Los cálculos que no dependen de los filtros (variaciones, puesto, actividad
+/// de cada estación) vienen hechos de Snowflake en las vistas v_pbi_* de GOLD.
+table Medidas
+	lineageTag: 346982d6-2658-46d2-85ed-e0d16ee72565
+
+	/// Los precios sospechosos llegan vacíos desde la vista, así que no entran en la media.
+	measure 'Precio medio' = AVERAGE ( FACT_PRECIO[Precio (€/l)] )
+		formatString: 0.000" €/l"
+		displayFolder: Precio
+		lineageTag: d0788fc3-6176-4569-a1cb-8d7ce2301aff
+
+	measure 'Precio de la estación' = [Precio medio]
+		formatString: 0.000" €/l"
+		displayFolder: Precio
+		lineageTag: 0bef0a7e-2769-45ca-acc0-c7bde9f178bf
+
+	/// Media de los precios medios de cada día.
+	measure 'Precio medio diario' = AVERAGEX ( VALUES ( DIM_FECHA[Fecha] ), [Precio medio] )
+		formatString: 0.000" €/l"
+		displayFolder: Precio
+		lineageTag: 7d788aae-4a2b-49fb-ae62-3e6ad3364f19
+
+	/// Precio medio en la última captura, sea cual sea el filtro de fechas.
+	measure 'Precio actual' =
+			CALCULATE (
+			    [Precio medio],
+			    FACT_PRECIO[Es última captura] = TRUE (),
+			    REMOVEFILTERS ( DIM_FECHA ),
+			    REMOVEFILTERS ( DIM_HORA )
+			)
+		formatString: 0.000" €/l"
+		displayFolder: Precio actual
+		lineageTag: d8ebfa38-8934-40fd-a4b2-a858f70800d8
+
+	/// Ordena los rankings: las estaciones sin precio actual quedan al final.
+	measure 'Precio actual (orden)' = COALESCE ( [Precio actual], 99 )
+		formatString: 0.000
+		isHidden
+		displayFolder: Precio actual
+		lineageTag: 011d7040-08eb-4267-954b-58342143d2e7
+
+	/// Precio más bajo de la última captura.
+	measure 'Precio mínimo actual' =
+			CALCULATE (
+			    MIN ( FACT_PRECIO[Precio (€/l)] ),
+			    FACT_PRECIO[Es última captura] = TRUE (),
+			    REMOVEFILTERS ( DIM_FECHA ),
+			    REMOVEFILTERS ( DIM_HORA )
+			)
+		formatString: 0.000" €/l"
+		displayFolder: Precio actual
+		lineageTag: 3cd76ada-40e8-4858-b964-19c928a96bfb
+
+	/// Precio más alto de la última captura.
+	measure 'Precio máximo actual' =
+			CALCULATE (
+			    MAX ( FACT_PRECIO[Precio (€/l)] ),
+			    FACT_PRECIO[Es última captura] = TRUE (),
+			    REMOVEFILTERS ( DIM_FECHA ),
+			    REMOVEFILTERS ( DIM_HORA )
+			)
+		formatString: 0.000" €/l"
+		displayFolder: Precio actual
+		lineageTag: cbd2d28b-6e7d-4212-8fcd-4bdb27fc1635
+
+	/// Media de la variación de cada estación entre la última captura y la de hace 24 horas.
+	measure 'Variación 24 h' =
+			CALCULATE (
+			    AVERAGE ( FACT_PRECIO[Variación 24 h (€/l)] ),
+			    FACT_PRECIO[Es última captura] = TRUE (),
+			    REMOVEFILTERS ( DIM_FECHA ),
+			    REMOVEFILTERS ( DIM_HORA )
+			) * 100
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Precio actual
+		lineageTag: 73a39d99-90cb-480b-baad-896fe140d7ee
+
+	/// Vacía hasta tener 7 días de histórico.
+	measure 'Variación 7 días' =
+			CALCULATE (
+			    AVERAGE ( FACT_PRECIO[Variación 7 días (€/l)] ),
+			    FACT_PRECIO[Es última captura] = TRUE (),
+			    REMOVEFILTERS ( DIM_FECHA ),
+			    REMOVEFILTERS ( DIM_HORA )
+			) * 100
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Precio actual
+		lineageTag: 988b5b73-a001-407b-8e01-1261cbe53f3e
+
+	measure 'Estaciones con precio' =
+			CALCULATE (
+			    COUNT ( FACT_PRECIO[Precio (€/l)] ),
+			    FACT_PRECIO[Es última captura] = TRUE (),
+			    REMOVEFILTERS ( DIM_FECHA ),
+			    REMOVEFILTERS ( DIM_HORA )
+			)
+		formatString: #,0
+		displayFolder: Precio actual
+		lineageTag: 5825f883-89bf-4838-8446-4de07876bc91
+
+	/// Puesto calculado en Snowflake con el precio de la última captura.
+	measure 'Puesto en la provincia (1 = más barata)' =
+			VAR _puesto =
+			    CALCULATE (
+			        MIN ( FACT_PRECIO[Puesto en la provincia] ),
+			        FACT_PRECIO[Es última captura] = TRUE (),
+			        REMOVEFILTERS ( DIM_FECHA ),
+			        REMOVEFILTERS ( DIM_HORA )
+			    )
+			VAR _total =
+			    CALCULATE (
+			        MIN ( FACT_PRECIO[Estaciones en la provincia] ),
+			        FACT_PRECIO[Es última captura] = TRUE (),
+			        REMOVEFILTERS ( DIM_FECHA ),
+			        REMOVEFILTERS ( DIM_HORA )
+			    )
+			RETURN
+			    IF ( HASONEVALUE ( DIM_ESTACION[ID estación] ) && NOT ISBLANK ( _puesto ), "Puesto " & _puesto & " de " & _total )
+		displayFolder: Precio actual
+		lineageTag: 443f8c2f-0f97-47de-9bd2-01dae27ed6a6
+
+	measure 'Media del municipio' =
+			VAR _municipio = SELECTEDVALUE ( DIM_ESTACION[Municipio] )
+			VAR _provincia = SELECTEDVALUE ( DIM_ESTACION[Provincia] )
+			RETURN
+			    IF (
+			        NOT ISBLANK ( _municipio ) && NOT ISBLANK ( _provincia ),
+			        CALCULATE (
+			            [Precio medio],
+			            REMOVEFILTERS ( DIM_ESTACION ),
+			            DIM_ESTACION[Municipio] = _municipio,
+			            DIM_ESTACION[Provincia] = _provincia
+			        )
+			    )
+		formatString: 0.000" €/l"
+		displayFolder: Entorno
+		lineageTag: 9a451c36-0635-457e-8dcf-f91dd6daeb77
+
+	measure 'Media de la provincia' =
+			VAR _provincia = SELECTEDVALUE ( DIM_ESTACION[Provincia] )
+			RETURN
+			    IF (
+			        NOT ISBLANK ( _provincia ),
+			        CALCULATE ( [Precio medio], REMOVEFILTERS ( DIM_ESTACION ), DIM_ESTACION[Provincia] = _provincia )
+			    )
+		formatString: 0.000" €/l"
+		displayFolder: Entorno
+		lineageTag: 635c92e9-8476-4d3f-9209-9fea99e23fc4
+
+	measure 'Media de la comunidad' =
+			VAR _comunidad = SELECTEDVALUE ( DIM_ESTACION[Comunidad autónoma] )
+			RETURN
+			    IF (
+			        NOT ISBLANK ( _comunidad ),
+			        CALCULATE ( [Precio medio], REMOVEFILTERS ( DIM_ESTACION ), DIM_ESTACION[Comunidad autónoma] = _comunidad )
+			    )
+		formatString: 0.000" €/l"
+		displayFolder: Entorno
+		lineageTag: 58f1687a-bdb4-4f7c-b30d-a05a4a01dfc7
+
+	/// Positivo: más caro que la media de su provincia. Vacía si no hay precio o si el contexto abarca varias provincias.
+	measure 'Diferencia con la provincia' = IF ( NOT ISBLANK ( [Precio medio] ) && NOT ISBLANK ( [Media de la provincia] ), ( [Precio medio] - [Media de la provincia] ) * 100 )
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Entorno
+		lineageTag: 1d4a7701-8922-44a8-8fc8-d9b7fcc8b442
+
+	/// Positivo: más caro que la media de su comunidad autónoma.
+	measure 'Diferencia con la comunidad' = IF ( NOT ISBLANK ( [Precio medio] ) && NOT ISBLANK ( [Media de la comunidad] ), ( [Precio medio] - [Media de la comunidad] ) * 100 )
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Entorno
+		lineageTag: b93dd323-9120-43de-9733-034ed3771e1b
+
+	/// Media de los filtros activos sin el desglose por marca, tamaño de municipio o zona fiscal.
+	measure 'Media del ámbito' =
+			CALCULATE (
+			    [Precio medio],
+			    REMOVEFILTERS ( DIM_ESTACION[Marca] ),
+			    REMOVEFILTERS ( DIM_ESTACION[Tamaño del municipio], DIM_ESTACION[Orden tamaño del municipio] ),
+			    REMOVEFILTERS ( DIM_ESTACION[Zona fiscal] )
+			)
+		formatString: 0.000" €/l"
+		displayFolder: Entorno
+		lineageTag: a2800b54-0f26-44ce-92e4-5c0ace04bea5
+
+	/// Positivo: el grupo es más caro que la media de los filtros activos.
+	measure 'Diferencia con la media del ámbito' = IF ( NOT ISBLANK ( [Precio medio] ), ( [Precio medio] - [Media del ámbito] ) * 100 )
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Entorno
+		lineageTag: cb123b8e-d87c-492d-935d-d126d255e738
+
+	/// Media de los filtros activos sin el filtro de marca. Mantiene la zona fiscal.
+	measure 'Media sin marca' = CALCULATE ( [Precio medio], REMOVEFILTERS ( DIM_ESTACION[Marca] ) )
+		formatString: 0.000" €/l"
+		displayFolder: Entorno
+		lineageTag: da91d4ba-5aed-4880-a1da-39ee7daab649
+
+	/// Positivo: la marca es más cara que la media de su misma zona.
+	measure 'Diferencia con la media sin marca' = IF ( NOT ISBLANK ( [Precio medio] ), ( [Precio medio] - [Media sin marca] ) * 100 )
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Entorno
+		lineageTag: b13c1d73-7ffb-480f-927c-d7af50b89824
+
+	/// Precio actual medio de la marca en la provincia, sin el desglose por municipio ni estación.
+	measure 'Media de la marca' =
+			CALCULATE (
+			    [Precio actual],
+			    REMOVEFILTERS ( DIM_ESTACION[Municipio] ),
+			    REMOVEFILTERS ( DIM_ESTACION[Tamaño del municipio], DIM_ESTACION[Orden tamaño del municipio] ),
+			    REMOVEFILTERS ( DIM_ESTACION[Estación] )
+			)
+		formatString: 0.000" €/l"
+		displayFolder: Entorno
+		lineageTag: c8fc1328-a622-45f6-a8d2-29412fda846d
+
+	/// Positivo: el municipio es más caro que la media de su marca.
+	measure 'Diferencia con la media de la marca' = IF ( NOT ISBLANK ( [Precio actual] ), ( [Precio actual] - [Media de la marca] ) * 100 )
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Entorno
+		lineageTag: 3063b3e9-0001-4148-809b-20885cec4be0
+
+	/// Positivo: el gasóleo es más caro que la gasolina.
+	measure 'Diferencia gasóleo - gasolina' =
+			(
+			    CALCULATE ( [Precio medio], DIM_PRODUCTO[Producto] = "Gasóleo A" )
+			        - CALCULATE ( [Precio medio], DIM_PRODUCTO[Producto] = "Gasolina 95" )
+			) * 100
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Entorno
+		lineageTag: 6db72b31-a23c-4811-90de-7dc289cd5218
+
+	measure 'Nº estaciones' = DISTINCTCOUNT ( FACT_PRECIO[STATION_SK] )
+		formatString: #,0
+		displayFolder: Entorno
+		lineageTag: 45620a9d-c02c-468d-9f88-73a7053874e8
+
+	/// La columna de cambio solo tiene valor en las capturas con cambio de precio.
+	measure 'Nº cambios de precio' = COUNT ( FACT_PRECIO[Cambio (€/l)] )
+		formatString: #,0
+		displayFolder: Cambios
+		lineageTag: ed0b7462-5d14-45e1-8373-a4807c060df4
+
+	measure 'Nº subidas' = CALCULATE ( [Nº cambios de precio], FACT_PRECIO[Cambio (€/l)] > 0 )
+		formatString: #,0
+		displayFolder: Cambios
+		lineageTag: bad369e3-0101-49ae-ac7a-f000311ad1f8
+
+	measure 'Nº bajadas' = CALCULATE ( [Nº cambios de precio], FACT_PRECIO[Cambio (€/l)] < 0 )
+		formatString: #,0
+		displayFolder: Cambios
+		lineageTag: 5bfff8a8-f79f-4f2a-994a-0b2ea42a4a1d
+
+	measure 'Magnitud media del cambio' = AVERAGE ( FACT_PRECIO[Magnitud del cambio (€/l)] ) * 100
+		formatString: 0.0" cént/l"
+		displayFolder: Cambios
+		lineageTag: d3e54819-cc9b-428e-a07e-8bf69e5e835c
+
+	measure 'Días con cambios' = CALCULATE ( DISTINCTCOUNT ( FACT_PRECIO[DATE_KEY] ), FACT_PRECIO[Es cambio de precio] = TRUE () )
+		formatString: 0
+		displayFolder: Cambios
+		lineageTag: 261faff4-6cc6-4ad4-b9da-02af965531a2
+
+	measure 'Cambios por estación' = DIVIDE ( [Nº cambios de precio], [Nº estaciones] )
+		formatString: 0.0
+		displayFolder: Cambios
+		lineageTag: a3099122-66cc-49f5-a25b-835a72de3991
+
+	measure 'Precio antes del cambio' = MAX ( FACT_PRECIO[Precio anterior (€/l)] )
+		formatString: 0.000" €/l"
+		displayFolder: Cambios
+		lineageTag: 1372e221-7383-4c03-9339-6b1bf5769418
+
+	measure 'Precio después del cambio' = CALCULATE ( MAX ( FACT_PRECIO[Precio (€/l)] ), FACT_PRECIO[Es cambio de precio] = TRUE () )
+		formatString: 0.000" €/l"
+		displayFolder: Cambios
+		lineageTag: ee8df884-dae4-4e9f-b9cc-07daff83e0fc
+
+	measure Cambio = SUM ( FACT_PRECIO[Cambio (€/l)] ) * 100
+		formatString: +0.0" cént/l";-0.0" cént/l";0.0" cént/l"
+		displayFolder: Cambios
+		lineageTag: 8c2a5280-57b4-4757-ac2e-dc036586b535
+
+	/// Diferencia media entre el precio de cada captura y la media de esa estación ese día.
+	/// Cerca de 0: la hora no influye en el precio.
+	measure 'Diferencia con la media del día' = AVERAGE ( FACT_PRECIO[Diferencia con la media del día (€/l)] ) * 100
+		formatString: +0.00" cént/l";-0.00" cént/l";0.00" cént/l"
+		displayFolder: Cambios
+		lineageTag: af991d07-9b19-4118-aee5-9f13c42dfc14
+
+	/// Todo el histórico: parte de los cambios que hace el 10 % de estaciones más activas.
+	measure '% de cambios del 10 % más activo' =
+			DIVIDE (
+			    CALCULATE ( SUM ( RESUMEN_ESTACION[Nº cambios] ), RESUMEN_ESTACION[Es del 10 % más activo] = TRUE () ),
+			    SUM ( RESUMEN_ESTACION[Nº cambios] )
+			)
+		formatString: 0 %
+		displayFolder: Cambios (histórico)
+		lineageTag: 7c47da43-e1a9-4b18-a793-d3481224dbfe
+
+	/// Todo el histórico.
+	measure '% de estaciones sin cambios' =
+			DIVIDE (
+			    CALCULATE ( COUNTROWS ( RESUMEN_ESTACION ), RESUMEN_ESTACION[Nº cambios] = 0 ),
+			    COUNTROWS ( RESUMEN_ESTACION )
+			)
+		formatString: 0 %
+		displayFolder: Cambios (histórico)
+		lineageTag: bdbda491-6c60-4140-bd08-19d1de8d9763
+
+	/// Todo el histórico: estaciones con algún cambio de precio en cada día con datos.
+	measure 'Estaciones que cambian todos los días' = CALCULATE ( COUNTROWS ( RESUMEN_ESTACION ), RESUMEN_ESTACION[Cambia todos los días] = TRUE () ) + 0
+		formatString: #,0
+		displayFolder: Cambios (histórico)
+		lineageTag: ee9bb549-6b10-4ad1-84fa-d71597fa5b91
+
+	measure 'Fuente y periodo' =
+			"Geoportal de carburantes del Ministerio · del "
+			    & FORMAT ( CALCULATE ( MIN ( FACT_PRECIO[Captura] ), REMOVEFILTERS () ), "dd/mm/yyyy" ) & " al "
+			    & FORMAT ( CALCULATE ( MAX ( FACT_PRECIO[Captura] ), REMOVEFILTERS () ), "dd/mm/yyyy hh:nn" ) & " · "
+			    & CALCULATE ( DISTINCTCOUNT ( FACT_PRECIO[Captura] ), REMOVEFILTERS () ) & " capturas"
+		displayFolder: Textos
+		lineageTag: 92746dc9-9df7-4806-a0fa-2fe6b46d6b8f
+
+	measure 'Último snapshot' = FORMAT ( CALCULATE ( MAX ( FACT_PRECIO[Captura] ), REMOVEFILTERS () ), "dd/mm/yyyy hh:nn" )
+		displayFolder: Textos
+		lineageTag: be155cf4-103c-4d95-88e4-b6987e3cacfd
+
+	/// Resume los filtros geográficos y de producto activos.
+	measure Ámbito =
+			VAR _zona =
+			    SWITCH (
+			        TRUE (),
+			        HASONEVALUE ( DIM_ESTACION[Municipio] ) && ISFILTERED ( DIM_ESTACION[Municipio] ),
+			            SELECTEDVALUE ( DIM_ESTACION[Municipio] ),
+			        HASONEVALUE ( DIM_ESTACION[Provincia] ) && ISFILTERED ( DIM_ESTACION[Provincia] ),
+			            SELECTEDVALUE ( DIM_ESTACION[Provincia] ),
+			        HASONEVALUE ( DIM_ESTACION[Comunidad autónoma] ) && ISFILTERED ( DIM_ESTACION[Comunidad autónoma] ),
+			            SELECTEDVALUE ( DIM_ESTACION[Comunidad autónoma] ),
+			        "España"
+			    )
+			RETURN "Ámbito: " & _zona & " · " & SELECTEDVALUE ( DIM_PRODUCTO[Producto], "varios productos" )
+		displayFolder: Textos
+		lineageTag: 55b32486-155e-4aca-a6cf-0708f28be8df
+
+	/// Nombre de la estación en el tooltip de los mapas.
+	measure 'Nombre de la estación' = SELECTEDVALUE ( DIM_ESTACION[Estación], "Varias estaciones" )
+		displayFolder: Textos
+		lineageTag: 3e9de789-a901-4048-83e1-5bc8f1c75aed
+
+	measure 'Estación seleccionada' =
+			IF (
+			    HASONEVALUE ( DIM_ESTACION[ID estación] ),
+			    SELECTEDVALUE ( DIM_ESTACION[Dirección] ) & ", " & SELECTEDVALUE ( DIM_ESTACION[Municipio] ) & " ("
+			        & SELECTEDVALUE ( DIM_ESTACION[Provincia] ) & ") · marca " & SELECTEDVALUE ( DIM_ESTACION[Marca] ),
+			    "Selecciona una estación"
+			)
+		displayFolder: Textos
+		lineageTag: 7303474a-f95a-4a9e-96bf-a6b57210d580
+
+	measure 'Comparación del municipio' =
+			VAR _diferencia = [Diferencia con la provincia]
+			RETURN
+			    IF (
+			        HASONEVALUE ( DIM_ESTACION[Municipio] ) && NOT ISBLANK ( _diferencia ),
+			        SELECTEDVALUE ( DIM_ESTACION[Municipio] ) & ": " & FORMAT ( ABS ( _diferencia ), "0.0" ) & " cént/l "
+			            & IF ( _diferencia >= 0, "más caro", "más barato" ) & " que la media de "
+			            & SELECTEDVALUE ( DIM_ESTACION[Provincia] ),
+			        "Selecciona un municipio"
+			    )
+		displayFolder: Textos
+		lineageTag: 63d2ae44-e103-4ebf-8a54-241794907351
+
+	column Valor
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: b66d2b60-e88e-4120-9c28-07aed96ce36e
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Valor]
+
+	partition Medidas = calculated
+		mode: import
+		source = ROW ( "Valor", 0 )
+

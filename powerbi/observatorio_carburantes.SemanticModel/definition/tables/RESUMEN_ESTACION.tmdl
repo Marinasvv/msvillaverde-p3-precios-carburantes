@@ -1,0 +1,69 @@
+/// Actividad de cada estación y producto en todo el histórico (vista GOLD.v_pbi_resumen_estacion).
+/// Se une a la versión vigente de la estación y no responde al filtro de fechas.
+table RESUMEN_ESTACION
+	lineageTag: a1e5465c-685d-47e1-aa49-a8108e21e84b
+
+	column STATION_SK
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 1b5c358e-e4a4-4746-ac02-d89502623774
+		summarizeBy: none
+		sourceColumn: STATION_SK
+
+	column PRODUCT_SK
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: faf09290-aca0-4f79-b9d6-902a610dbe7d
+		summarizeBy: none
+		sourceColumn: PRODUCT_SK
+
+	column 'Nº cambios'
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2f9eb4b0-6ad0-4f45-bc37-7ca7a2b7f027
+		summarizeBy: none
+		sourceColumn: CAMBIOS
+
+		annotation SummarizationSetBy = User
+
+	column 'Días con cambios'
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 2d19187b-c7d2-4f5a-991c-db02e4283cfd
+		summarizeBy: none
+		sourceColumn: DIAS_CON_CAMBIOS
+
+		annotation SummarizationSetBy = User
+
+	column 'Es del 10 % más activo'
+		dataType: boolean
+		isHidden
+		lineageTag: b255f8ce-8f24-482c-8352-56880d20266d
+		summarizeBy: none
+		sourceColumn: ES_10_MAS_ACTIVO
+
+	column 'Cambia todos los días'
+		dataType: boolean
+		isHidden
+		lineageTag: aaad1a41-9940-4acf-9c64-ca1d5a7a832e
+		summarizeBy: none
+		sourceColumn: CAMBIA_TODOS_LOS_DIAS
+
+	partition RESUMEN_ESTACION = m
+		mode: import
+		source =
+				let
+				    Origen = Snowflake.Databases(#"Servidor Snowflake", #"Warehouse Snowflake", [Role = "SYSADMIN", Implementation = "2.0"]),
+				    BaseDatos = Origen{[Name = "CARBURANTES_DB", Kind = "Database"]}[Data],
+				    Esquema = BaseDatos{[Name = "GOLD", Kind = "Schema"]}[Data],
+				    Vista = Esquema{[Name = "V_PBI_RESUMEN_ESTACION", Kind = "View"]}[Data],
+				  #"Tipo de columna cambiado" = Table.TransformColumnTypes(Vista, {{"STATION_SK", Int64.Type}, {"PRODUCT_SK", Int64.Type}, {"CAMBIOS", Int64.Type}, {"DIAS_CON_CAMBIOS", Int64.Type}})
+				in
+				    #"Tipo de columna cambiado"
+
+	annotation PBI_ResultType = Table
+

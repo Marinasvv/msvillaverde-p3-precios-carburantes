@@ -1,0 +1,11 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/gitIntegration/platformProperties/2.0.0/schema.json",
+  "metadata": {
+    "type": "Report",
+    "displayName": "observatorio_carburantes"
+  },
+  "config": {
+    "version": "2.0",
+    "logicalId": "6f1b2c4e-8a3d-4f5e-9b7c-1d2e3f4a5b60"
+  }
+}

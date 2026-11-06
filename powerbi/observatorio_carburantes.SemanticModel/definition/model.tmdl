@@ -1,0 +1,25 @@
+model Model
+	culture: es-ES
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+	sourceQueryCulture: es-ES
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_QueryOrder = ["Servidor Snowflake","Warehouse Snowflake","FACT_PRECIO","DIM_ESTACION","DIM_PRODUCTO","DIM_FECHA","DIM_HORA","RESUMEN_ESTACION"]
+
+annotation PBI_ProTooling = ["DevMode"]
+
+ref table FACT_PRECIO
+ref table DIM_ESTACION
+ref table DIM_PRODUCTO
+ref table DIM_FECHA
+ref table DIM_HORA
+ref table RESUMEN_ESTACION
+ref table Medidas
+
+ref cultureInfo es-ES
+

@@ -1,0 +1,108 @@
+/// Estaciones con sus versiones (SCD2), vista GOLD.v_pbi_dim_estacion. Cada precio se une a los
+/// datos que tenía la estación en ese momento.
+table DIM_ESTACION
+	lineageTag: 5cd25bc1-b71a-466e-8f60-4d356d67c3ac
+
+	column STATION_SK
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 98d5cfff-3d5d-4560-9e8b-c25e5d137f8e
+		summarizeBy: none
+		sourceColumn: STATION_SK
+
+	column 'ID estación'
+		dataType: string
+		lineageTag: 2377a40d-3935-4530-9532-bde010b26350
+		summarizeBy: none
+		sourceColumn: ID_ESTACION
+
+	column Marca
+		dataType: string
+		lineageTag: 211fb0be-6a86-4a40-9c82-4ce80ad54df7
+		summarizeBy: none
+		sourceColumn: MARCA
+
+	column Estación
+		dataType: string
+		lineageTag: 83074cbf-8e70-4397-ae83-e248802b4c6b
+		summarizeBy: none
+		sourceColumn: ESTACION
+
+	column Dirección
+		dataType: string
+		lineageTag: 20eb5f58-fd35-421c-bb09-f8ef5cda42cd
+		summarizeBy: none
+		sourceColumn: DIRECCION
+
+	column Municipio
+		dataType: string
+		lineageTag: 6ab74ae9-a9fa-4683-9c4b-3e1f592254b6
+		summarizeBy: none
+		sourceColumn: MUNICIPIO
+
+	column Provincia
+		dataType: string
+		lineageTag: 4a9a86f9-9823-48da-aa56-4b0a0bed3101
+		dataCategory: StateOrProvince
+		summarizeBy: none
+		sourceColumn: PROVINCIA
+
+	column 'Comunidad autónoma'
+		dataType: string
+		lineageTag: 895ba903-8ad5-4fef-a172-1eaba95e5f69
+		summarizeBy: none
+		sourceColumn: COMUNIDAD_AUTONOMA
+
+	column 'Zona fiscal'
+		dataType: string
+		lineageTag: 680cde5e-db97-491f-87d5-ce82e9a35950
+		summarizeBy: none
+		sourceColumn: ZONA_FISCAL
+
+	column Latitud
+		dataType: double
+		lineageTag: f6a15cfc-5f8f-48ab-94bc-a8b5d4d53081
+		dataCategory: Latitude
+		summarizeBy: none
+		sourceColumn: LATITUD
+
+	column Longitud
+		dataType: double
+		lineageTag: d1c6c688-d035-4af3-a518-2777c8df9921
+		dataCategory: Longitude
+		summarizeBy: none
+		sourceColumn: LONGITUD
+
+	column 'Orden tamaño del municipio'
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 47714762-4f7f-4ff1-a9f9-177d76af3738
+		summarizeBy: none
+		sourceColumn: ORDEN_TAMANO_MUNICIPIO
+
+		annotation SummarizationSetBy = User
+
+	/// Aproxima el tamaño del municipio por el número de estaciones vigentes que tiene.
+	column 'Tamaño del municipio'
+		dataType: string
+		lineageTag: 952e917f-1e4c-44f0-8e93-612fb2c410e2
+		summarizeBy: none
+		sourceColumn: TAMANO_MUNICIPIO
+		sortByColumn: 'Orden tamaño del municipio'
+
+	partition DIM_ESTACION = m
+		mode: import
+		source =
+				let
+				    Origen = Snowflake.Databases(#"Servidor Snowflake", #"Warehouse Snowflake", [Role = "SYSADMIN", Implementation = "2.0"]),
+				    BaseDatos = Origen{[Name = "CARBURANTES_DB", Kind = "Database"]}[Data],
+				    Esquema = BaseDatos{[Name = "GOLD", Kind = "Schema"]}[Data],
+				    Vista = Esquema{[Name = "V_PBI_DIM_ESTACION", Kind = "View"]}[Data],
+				  #"Tipo de columna cambiado" = Table.TransformColumnTypes(Vista, {{"STATION_SK", Int64.Type}, {"ORDEN_TAMANO_MUNICIPIO", Int64.Type}})
+				in
+				    #"Tipo de columna cambiado"
+
+	annotation PBI_ResultType = Table
+

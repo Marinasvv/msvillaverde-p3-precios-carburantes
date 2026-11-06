@@ -1,0 +1,112 @@
+{
+  "version": "1.1.0",
+  "diagrams": [
+    {
+      "ordinal": 0,
+      "scrollPosition": {
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "location": {
+            "x": 618.38798124082336,
+            "y": 0
+          },
+          "nodeIndex": "DIM_ESTACION",
+          "nodeLineageTag": "5cd25bc1-b71a-466e-8f60-4d356d67c3ac",
+          "size": {
+            "height": 414,
+            "width": 234
+          },
+          "zIndex": 7
+        },
+        {
+          "location": {
+            "x": 0,
+            "y": 541.21077292646839
+          },
+          "nodeIndex": "DIM_FECHA",
+          "nodeLineageTag": "0d8e4f55-2f2b-4efc-85ee-89aeb7859c1c",
+          "size": {
+            "height": 145,
+            "width": 234
+          },
+          "zIndex": 6
+        },
+        {
+          "location": {
+            "x": 50,
+            "y": 0
+          },
+          "nodeIndex": "DIM_HORA",
+          "nodeLineageTag": "716d44c1-abd7-4ac7-840e-aa84d246b98b",
+          "size": {
+            "height": 145,
+            "width": 234
+          },
+          "zIndex": 2
+        },
+        {
+          "location": {
+            "x": 625.3961623097573,
+            "y": 618.69011101457545
+          },
+          "nodeIndex": "DIM_PRODUCTO",
+          "nodeLineageTag": "6594617f-b825-434a-834b-0d4b9c0dd64b",
+          "size": {
+            "height": 128,
+            "width": 234
+          },
+          "zIndex": 3
+        },
+        {
+          "location": {
+            "x": 318.18742911335289,
+            "y": 83.049330203238128
+          },
+          "nodeIndex": "FACT_PRECIO",
+          "nodeLineageTag": "a0234b82-8958-4ed4-b45b-1709cab223c8",
+          "size": {
+            "height": 509,
+            "width": 234
+          },
+          "zIndex": 5
+        },
+        {
+          "location": {
+            "x": 967.57382632991653,
+            "y": 282
+          },
+          "nodeIndex": "RESUMEN_ESTACION",
+          "nodeLineageTag": "a1e5465c-685d-47e1-aa49-a8108e21e84b",
+          "size": {
+            "height": 256,
+            "width": 234
+          },
+          "zIndex": 4
+        },
+        {
+          "location": {
+            "x": 1284.5738263299168,
+            "y": 335.6053864632342
+          },
+          "nodeIndex": "Precio mínimo actual",
+          "size": {
+            "height": 249,
+            "width": 234
+          },
+          "zIndex": 0
+        }
+      ],
+      "name": "Todas las tablas",
+      "zoomValue": 100,
+      "pinKeyFieldsToTop": false,
+      "showExtraHeaderInfo": false,
+      "hideKeyFieldsWhenCollapsed": false,
+      "tablesLocked": false
+    }
+  ],
+  "selectedDiagram": "Todas las tablas",
+  "defaultDiagram": "Todas las tablas"
+}

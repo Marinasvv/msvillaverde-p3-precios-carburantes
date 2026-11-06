@@ -1,0 +1,45 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "resumen",
+  "displayName": "Resumen",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "visualInteractions": [
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_kpi_0",
+      "type": "NoFilter"
+    },
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_kpi_1",
+      "type": "NoFilter"
+    },
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_kpi_2",
+      "type": "NoFilter"
+    },
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_kpi_3",
+      "type": "NoFilter"
+    },
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_kpi_4",
+      "type": "NoFilter"
+    },
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_provincias",
+      "type": "NoFilter"
+    },
+    {
+      "source": "resumen_provincia_ranking",
+      "target": "resumen_ambito",
+      "type": "NoFilter"
+    }
+  ]
+}

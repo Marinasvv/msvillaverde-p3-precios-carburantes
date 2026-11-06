@@ -1,0 +1,113 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "galicia_coruna",
+  "displayName": "Galicia y A Coruña",
+  "displayOption": "FitToPage",
+  "height": 1080,
+  "width": 1920,
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "filtro_galicia",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "DIM_ESTACION"
+              }
+            },
+            "Property": "Comunidad autónoma"
+          }
+        },
+        "type": "Categorical",
+        "filter": {
+          "Version": 2,
+          "From": [
+            {
+              "Name": "d",
+              "Entity": "DIM_ESTACION",
+              "Type": 0
+            }
+          ],
+          "Where": [
+            {
+              "Condition": {
+                "In": {
+                  "Expressions": [
+                    {
+                      "Column": {
+                        "Expression": {
+                          "SourceRef": {
+                            "Source": "d"
+                          }
+                        },
+                        "Property": "Comunidad autónoma"
+                      }
+                    }
+                  ],
+                  "Values": [
+                    [
+                      {
+                        "Literal": {
+                          "Value": "'Galicia'"
+                        }
+                      }
+                    ]
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        "howCreated": "User"
+      }
+    ]
+  },
+  "visualInteractions": [
+    {
+      "source": "galicia_provincia",
+      "target": "galicia_kpi_galicia",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_provincia",
+      "target": "galicia_provincias",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_kpi_galicia",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_kpi_provincia",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_mapa",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_municipios",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_provincias",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_tamano",
+      "type": "NoFilter"
+    },
+    {
+      "source": "galicia_municipio",
+      "target": "galicia_coruna_ambito",
+      "type": "NoFilter"
+    }
+  ]
+}
