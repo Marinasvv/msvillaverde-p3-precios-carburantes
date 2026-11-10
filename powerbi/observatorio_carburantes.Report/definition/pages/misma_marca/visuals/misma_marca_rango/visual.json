@@ -98,10 +98,10 @@
                     "Entity": "Medidas"
                   }
                 },
-                "Property": "Precio actual"
+                "Property": "Nº estaciones"
               }
             },
-            "direction": "Ascending"
+            "direction": "Descending"
           }
         ]
       }

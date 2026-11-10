@@ -67,7 +67,7 @@
                           [
                             {
                               "Literal": {
-                                "Value": "'Gasóleo A'"
+                                "Value": "'Gasolina 95'"
                               }
                             }
                           ]
@@ -215,5 +215,23 @@
       "filterChanges": true
     },
     "drillFilterOtherVisuals": true
+  },
+  "filterConfig": {
+    "filters": [
+      {
+        "name": "5307e48405a1591b0619",
+        "field": {
+          "Column": {
+            "Expression": {
+              "SourceRef": {
+                "Entity": "DIM_PRODUCTO"
+              }
+            },
+            "Property": "Producto"
+          }
+        },
+        "type": "Categorical"
+      }
+    ]
   }
 }
